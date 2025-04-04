@@ -15,7 +15,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Black
-        run: pip install black
+        run: pip install black ruff
 
       - name: Check coding style
-        run: poetry run black --check .
+        run: black --check .
