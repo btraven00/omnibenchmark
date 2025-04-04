@@ -19,9 +19,9 @@ def test_export_computational_to_dot():
             benchmark = Benchmark(benchmark_file_path)
             dot = benchmark.export_to_dot()
             dot.write(output_file)
-            assert (
-                output_file_path.exists()
-            ), f"Output file {output_file} was not created."
+            assert output_file_path.exists(), (
+                f"Output file {output_file} was not created."
+            )
     except Exception as e:
         pytest.fail(f"Plotting benchmark computational graph failed: {e}")
     finally:
