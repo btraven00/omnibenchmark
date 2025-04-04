@@ -76,9 +76,7 @@ def run_benchmark(
 
     benchmark = validate_benchmark(benchmark)
     if benchmark is None:
-        logger.error(
-            "Invalid benchmark"
-        )
+        logger.error("Invalid benchmark")
         sys.exit(1)
 
     workflow: WorkflowEngine = SnakemakeEngine()
