@@ -14,8 +14,19 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Black
+      - name: Install Linters
         run: pip install black ruff
 
+      # For the time being, let's keep the black check as the
+      # only mandatory step.
       - name: Check coding style
         run: black --check .
+
+      # Optional Ruff check (allowed to fail)
+      # Ruff if faster, but it's throwing a wider variety of errors that still need
+      # work to be fixed.
+      - name: Lint with Ruff (optional)
+        continue-on-error: true # 👈 This makes the job pass even if Ruff fails
+        run: |
+          ruff check .
+          echo "Note: Ruff failures are non-blocking for now"
