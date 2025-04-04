@@ -15,13 +15,14 @@ jobs:
       - name: Set up python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       #----------------------------------------------
       #  -----  install & configure poetry  -----
       #----------------------------------------------
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
+          version: 1.5.1
           virtualenvs-create: true
           virtualenvs-in-project: true
       #----------------------------------------------
@@ -42,8 +43,8 @@ jobs:
       #----------------------------------------------
       # install your root project, if required
       #----------------------------------------------
-      - name: Install library
-        run: poetry install --no-interaction
+      # - name: Install library
+      #  run: poetry install --no-interaction
       #----------------------------------------------
       # Check coding style using black
       #----------------------------------------------
