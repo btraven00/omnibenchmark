@@ -15,6 +15,7 @@ from omnibenchmark.benchmark.cite import (
     format_output,
     CitationExtractionError,
 )
+from omnibenchmark.benchmark.repository_utils import cleanup_temp_repositories
 from omnibenchmark.cli.utils.logging import logger
 from omnibenchmark.cli.utils.validation import validate_benchmark
 from omnibenchmark.io.storage import get_storage, remote_storage_args
@@ -234,19 +235,22 @@ def cite_benchmark(ctx, benchmark: str, format: str, warn: bool, out: str):
             )
         except RuntimeWarning as e:
             logger.warning(str(e))
+            cleanup_temp_repositories()
             return
         except CitationExtractionError as e:
             logger.error(str(e))
             logger.error(f"Failed modules: {', '.join(e.failed_modules)}")
             # Log detailed error information
-            for error in e.errors:
-                logger.error(f"  - {error.msg}")
+            for issue in e.issues:
+                logger.error(f"  - {issue.msg}")
+            cleanup_temp_repositories()
             ctx.exit(1)
 
         try:
             output = format_output(citation_metadata, format)
         except ValueError as e:
             logger.error(str(e))
+            cleanup_temp_repositories()
             ctx.exit(1)
 
         if out:
@@ -256,6 +260,10 @@ def cite_benchmark(ctx, benchmark: str, format: str, warn: bool, out: str):
                 logger.info(f"Output written to {out}")
             except Exception as e:
                 logger.error(f"Failed to write output file: {e}")
+                cleanup_temp_repositories()
                 ctx.exit(1)
         else:
             click.echo(output)
+
+        # Cleanup omnibenchmark temporary directory
+        cleanup_temp_repositories()
