@@ -1,0 +1,51 @@
+# Example validation.yaml file for a clustering benchmark
+version: 1.0
+
+stages:
+  dataset:
+    rules:
+      - file_pattern: "*.csv"
+        validations:
+          - type: not_empty
+          - type: has_columns
+            columns: ["sample_id", "feature_1", "feature_2", "label"]
+          - type: has_shape
+            min_rows: 10
+            min_cols: 4
+          - type: not_na
+            columns: ["sample_id", "label"]
+
+      - file_pattern: "metadata.json"
+        validations:
+          - type: not_empty
+
+  method:
+    rules:
+      - file_pattern: "clusters.csv"
+        validations:
+          - type: not_empty
+          - type: has_columns
+            columns: ["sample_id", "cluster_id"]
+          - type: not_na
+            columns: ["sample_id", "cluster_id"]
+          - type: has_shape
+            min_rows: 1
+
+      - file_pattern: "params.json"
+        validations:
+          - type: not_empty
+
+  metric:
+    rules:
+      - file_pattern: "scores.json"
+        validations:
+          - type: not_empty
+
+      - file_pattern: "detailed_scores.csv"
+        validations:
+          - type: not_empty
+          - type: has_columns
+            columns: ["metric_name", "score"]
+          - type: has_shape
+            min_rows: 1
+            max_rows: 100
