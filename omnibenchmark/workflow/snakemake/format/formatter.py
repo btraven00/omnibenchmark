@@ -3,7 +3,7 @@ from itertools import takewhile
 from pathlib import Path
 from typing import List, Set, Tuple, Union, NamedTuple, Dict
 
-from omni_schema.datamodel.omni_schema import MetricCollector
+from omnibenchmark.model import MetricCollector
 
 from omnibenchmark.benchmark import BenchmarkNode, Benchmark
 from omnibenchmark.utils import format_mc_output

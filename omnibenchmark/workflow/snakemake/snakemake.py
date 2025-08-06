@@ -8,7 +8,7 @@ from pathlib import Path
 from snakemake.cli import args_to_api as snakemake_cli, parse_args
 from typing import TextIO, List, Optional
 
-from omni_schema.datamodel.omni_schema import SoftwareBackendEnum
+from omnibenchmark.model import SoftwareBackendEnum
 
 from omnibenchmark.benchmark import Benchmark, BenchmarkNode
 from omnibenchmark.workflow.workflow import WorkflowEngine

@@ -3,7 +3,7 @@ from pathlib import Path
 from abc import ABCMeta, abstractmethod
 from typing import Optional
 
-from omni_schema.datamodel.omni_schema import SoftwareBackendEnum
+from omnibenchmark.model import SoftwareBackendEnum
 
 from omnibenchmark.benchmark import Benchmark, BenchmarkNode
 

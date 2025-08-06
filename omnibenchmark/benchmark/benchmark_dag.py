@@ -1,19 +1,25 @@
 from pathlib import Path
 from typing import List, Tuple
 
-import networkx as nx
-import pydot
 
-import omni_schema.datamodel.omni_schema
-
-from omnibenchmark.benchmark.converter import LinkMLConverter
 from omnibenchmark.benchmark.benchmark_node import BenchmarkNode
-from omnibenchmark.benchmark.validation import ValidationError
+from omnibenchmark.model import ValidationError
+from omnibenchmark.dag import (
+    DiGraph,
+    topological_sort,
+    all_simple_paths,
+    get_node_attributes,
+    NetworkXUnfeasible,
+)
+from omnibenchmark.model import BenchmarkConverter
+from omnibenchmark.model import Stage
+
+import pydot  # TODO: should not be a global import, just on the command on demand
 
 
 def expend_stage_nodes(
-    converter: LinkMLConverter,
-    stage: omni_schema.datamodel.omni_schema.Stage,
+    converter: BenchmarkConverter,
+    stage: "Stage",
     out_dir: Path,
     stage_ordering: List[str],
 ) -> List[BenchmarkNode]:
@@ -69,8 +75,8 @@ def expend_stage_nodes(
     return nodes
 
 
-def build_benchmark_dag(converter: LinkMLConverter, out_dir: Path) -> nx.DiGraph:
-    g = nx.DiGraph()
+def build_benchmark_dag(converter: BenchmarkConverter, out_dir: Path) -> DiGraph:
+    g = DiGraph()
 
     G_stages = build_stage_dag(converter)
     stage_ordering = compute_stage_order(G_stages)
@@ -92,8 +98,8 @@ def build_benchmark_dag(converter: LinkMLConverter, out_dir: Path) -> nx.DiGraph
     return g
 
 
-def build_stage_dag(converter: LinkMLConverter) -> nx.DiGraph:
-    g = nx.DiGraph()
+def build_stage_dag(converter: BenchmarkConverter) -> DiGraph:
+    g = DiGraph()
 
     for stage_id, stage in converter.get_stages().items():
         g.add_node(stage_id)
@@ -106,7 +112,7 @@ def build_stage_dag(converter: LinkMLConverter) -> nx.DiGraph:
 
 
 def find_initial_and_terminal_nodes(
-    graph: nx.DiGraph,
+    graph: DiGraph,
 ) -> Tuple[List[BenchmarkNode], List[BenchmarkNode]]:
     initial_nodes = [node for node, in_degree in graph.in_degree() if in_degree == 0]
     terminal_nodes = [
@@ -115,8 +121,8 @@ def find_initial_and_terminal_nodes(
     return initial_nodes, terminal_nodes
 
 
-def list_all_paths(graph: nx.DiGraph, source: BenchmarkNode, target: BenchmarkNode):
-    all_paths = list(nx.all_simple_paths(graph, source=source, target=target))
+def list_all_paths(graph: DiGraph, source: BenchmarkNode, target: BenchmarkNode):
+    all_paths = list(all_simple_paths(graph, source=source, target=target))
     return all_paths
 
 
@@ -140,11 +146,11 @@ def exclude_paths(paths, path_exclusions):
     return updated_paths
 
 
-def compute_stage_order(stage_dag: nx.DiGraph) -> List:
+def compute_stage_order(stage_dag: DiGraph) -> List:
     try:
-        topological_order = list(nx.topological_sort(stage_dag))
+        topological_order = list(topological_sort(stage_dag))
 
-    except nx.NetworkXUnfeasible:
+    except NetworkXUnfeasible:
         raise ValidationError(
             "The stage graph has a cyclic dependencies. This benchmark can not be resolved"
         )
@@ -153,7 +159,7 @@ def compute_stage_order(stage_dag: nx.DiGraph) -> List:
 
 
 def export_to_dot(
-    G: nx.DiGraph,
+    G: DiGraph,
     title: str = None,
 ):
     import matplotlib.pyplot as plt
@@ -164,7 +170,7 @@ def export_to_dot(
     graph_size = max(15, 15 * div_nodes_count)
 
     # Color nodes by stage (assuming 'stage' is a node attribute)
-    stages = nx.get_node_attributes(G, "stage", default="none")
+    stages = get_node_attributes(G, "stage", default="none")
     unique_stages = list(set(stages.values()))  # Get unique stages
 
     # Define a colormap with different shades for the stages

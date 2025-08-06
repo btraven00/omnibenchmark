@@ -3,10 +3,10 @@ import random
 
 import pytest
 
-import networkx as nx
+from omnibenchmark.dag import DiGraph
 from pathlib import Path
 
-from omnibenchmark.benchmark import Benchmark, dag
+from omnibenchmark.benchmark import Benchmark, benchmark_dag as dag
 
 
 @pytest.mark.short
@@ -138,7 +138,7 @@ def generate_graph(n_nodes, stage_proportions=None):
     n_metrics = int(n_nodes * stage_proportions["metrics"])
 
     # Create a directed graph
-    G = nx.DiGraph()
+    G = DiGraph()
 
     # Add dataset nodes
     datasets = [f"Dataset_{i + 1}" for i in range(n_datasets)]

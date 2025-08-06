@@ -4,12 +4,10 @@ import os.path
 from pathlib import Path
 from typing import Dict, List, Set
 
-from pydantic import ValidationError
 import pydot
 
-from omnibenchmark.benchmark import dag
-from omnibenchmark.benchmark.converter import LinkMLConverter
-from omnibenchmark.benchmark.validation.validator import Validator
+from omnibenchmark.benchmark import benchmark_dag as dag
+from omnibenchmark.model import BenchmarkConverter as LinkMLConverter, ValidationError
 from omnibenchmark.utils import format_mc_output
 
 
@@ -22,9 +20,8 @@ class Benchmark:
 
         converter = LinkMLConverter(benchmark_yaml)
 
-        validator = Validator()
         try:
-            converter = validator.validate(self.directory, converter)
+            converter.validate(self.directory)
         except ValidationError:
             # Just re-raising the validation error, explicitly
             raise

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from omni_schema.datamodel.omni_schema import SoftwareBackendEnum
+from omnibenchmark.model import SoftwareBackendEnum
 from omnibenchmark.benchmark import Benchmark
 from omnibenchmark.io.RemoteStorage import StorageOptions
 from omnibenchmark.io.exception import RemoteStorageInvalidInputException
@@ -22,7 +22,11 @@ def get_benchmark_data_path() -> Path:
 class TestMinIOStorage:
     def test_init_fail(self):
         with pytest.raises(AssertionError):
-            MinIOStorage(auth_options={}, benchmark="test", storage_options=StorageOptions(out_dir="out"))
+            MinIOStorage(
+                auth_options={},
+                benchmark="test",
+                storage_options=StorageOptions(out_dir="out"),
+            )
 
     def test_init_success(self, minio_storage):  # noqa: F811
         client = minio_storage.get_storage_client()

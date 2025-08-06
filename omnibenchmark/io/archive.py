@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List
 import os
 
-from omni_schema.datamodel import omni_schema
+from omnibenchmark.model import SoftwareBackendEnum
 
 from omnibenchmark.io.RemoteStorage import StorageOptions
 from omnibenchmark.io.code import clone_module
@@ -48,12 +48,12 @@ def prepare_archive_software(benchmark: Benchmark) -> List[Path]:
     # decide on software type
     which_env = benchmark.get_benchmark_software_backend()
     files = []
-    if which_env != omni_schema.SoftwareBackendEnum.host:
-        if which_env == omni_schema.SoftwareBackendEnum.envmodules:
+    if which_env != SoftwareBackendEnum.host:
+        if which_env == SoftwareBackendEnum.envmodules:
             files += prepare_archive_software_easyconfig(benchmark)
-        elif which_env == omni_schema.SoftwareBackendEnum.apptainer:
+        elif which_env == SoftwareBackendEnum.apptainer:
             files += prepare_archive_software_apptainer(benchmark)
-        elif which_env == omni_schema.SoftwareBackendEnum.conda:
+        elif which_env == SoftwareBackendEnum.conda:
             files += prepare_archive_software_conda(benchmark)
         else:
             raise NotImplementedError(
