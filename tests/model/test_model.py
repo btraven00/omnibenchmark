@@ -8,11 +8,9 @@ from pydantic import ValidationError
 
 from omnibenchmark.model import (
     # Helper functions
-    _merge_lists_by_id,
     validate_non_empty_string,
     validate_non_empty_commit,
     validate_hex_string,
-    _warning_api,
     # Enums
     APIVersion,
     SoftwareBackendEnum,
@@ -40,27 +38,6 @@ from .factories import (
 # Test helper functions
 @pytest.mark.short
 class TestHelperFunctions:
-    def test_merge_lists_by_id(self):
-        """Test merging lists of identifiable entities."""
-        list1 = [{"id": "a", "value": 1}, {"id": "b", "value": 2}]
-        list2 = [{"id": "b", "value": 3}, {"id": "c", "value": 4}]
-
-        merged = _merge_lists_by_id(list1, list2)
-        assert len(merged) == 3
-
-        # Convert to dict for easier checking
-        merged_dict = {item["id"]: item for item in merged}
-        assert merged_dict["a"]["value"] == 1
-        assert merged_dict["b"]["value"] == 3  # list2 overwrites list1
-        assert merged_dict["c"]["value"] == 4
-
-    def test_merge_lists_empty(self):
-        """Test merging with empty lists."""
-        list1 = [{"id": "a", "value": 1}]
-        assert _merge_lists_by_id(list1, []) == list1
-        assert _merge_lists_by_id([], list1) == list1
-        assert _merge_lists_by_id([], []) == []
-
     def test_validate_non_empty_string(self):
         """Test non-empty string validation."""
         assert validate_non_empty_string("valid") == "valid"
@@ -94,17 +71,6 @@ class TestHelperFunctions:
 
         with pytest.raises(ValueError, match="must be a valid hexadecimal string"):
             validate_hex_string("")
-
-    def test_warning_api(self):
-        """Test deprecation warning function."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = _warning_api("test_function", "return_value")
-
-            assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
-            assert "test_function" in str(w[0].message)
-            assert result == "return_value"
 
 
 # Test enums
