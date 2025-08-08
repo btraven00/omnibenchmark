@@ -60,9 +60,9 @@ def diff_benchmark(ctx, benchmark, version1, version2):
 
     # setup storage
     ss = get_storage(
-        str(benchmark.converter.model.storage_api),
+        benchmark.get_storage_api(),
         auth_options,
-        str(benchmark.converter.model.storage_bucket_name),
+        benchmark.get_storage_bucket_name(),
     )
 
     # get objects for first version
@@ -132,9 +132,9 @@ def list_versions(ctx, benchmark):
 
     # setup storage
     ss = get_storage(
-        str(benchmark.converter.model.storage_api),
+        benchmark.get_storage_api(),
         auth_options,
-        str(benchmark.converter.model.storage_bucket_name),
+        benchmark.get_storage_bucket_name(),
     )
 
     if len(ss.versions) > 0:

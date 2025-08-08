@@ -70,12 +70,8 @@ class TmpMinIOStorage:
         from omnibenchmark.model import Storage, StorageAPIEnum
 
         benchmark_obj.converter.model.storage = Storage(
-            api=StorageAPIEnum.s3, endpoint=self.endpoint
+            api=StorageAPIEnum.s3, endpoint=self.endpoint, bucket_name=self.bucket_name
         )
-        # Set the storage bucket name
-        benchmark_obj.converter.model.storage_bucket_name = self.bucket_name
-        # Also set the deprecated storage_api field for backwards compatibility
-        benchmark_obj.converter.model.storage_api = StorageAPIEnum.s3
         benchmark_file = str(self.out_dir / f"Benchmark_{self.bucket_name}.yaml")
         self.benchmark_file = benchmark_file
         # Use Pydantic's model dump and yaml to save

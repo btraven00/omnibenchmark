@@ -28,9 +28,32 @@ class Benchmark:
 
         self.converter: LinkMLConverter = converter
         self.out_dir = out_dir
+
         self.G = dag.build_benchmark_dag(converter, self.out_dir)
 
         self.execution_paths = None
+
+    def get_storage_api(self) -> str:
+        """Get storage API with backward compatibility."""
+        if self.converter.model.storage and self.converter.model.storage.api:
+            return str(self.converter.model.storage.api.value)
+        return (
+            str(self.converter.model.storage_api.value)
+            if self.converter.model.storage_api
+            else None
+        )
+
+    def get_storage_bucket_name(self) -> str:
+        """Get storage bucket name with backward compatibility."""
+        if self.converter.model.storage and self.converter.model.storage.bucket_name:
+            return self.converter.model.storage.bucket_name
+        return self.converter.model.storage_bucket_name
+
+    def get_storage_endpoint(self) -> str:
+        """Get storage endpoint."""
+        if self.converter.model.storage and self.converter.model.storage.endpoint:
+            return self.converter.model.storage.endpoint
+        return None
 
     def get_converter(self):
         return self.converter

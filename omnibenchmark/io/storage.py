@@ -22,7 +22,10 @@ except ImportError:
 # MinIO implementation. We should use a factory pattern to create the appropriate storage object instead,
 # assuming we support multiple storage types.
 def get_storage(
-    storage_type: str, auth_options: dict, benchmark: str, storage_options: StorageOptions = StorageOptions(out_dir="out")
+    storage_type: str,
+    auth_options: dict,
+    benchmark: str,
+    storage_options: StorageOptions = StorageOptions(out_dir="out"),
 ) -> Optional["MinIOStorage"]:
     """
     Selects a remote storage type.
@@ -51,27 +54,24 @@ def get_storage_from_benchmark(benchmark: Benchmark) -> "MinIOStorage":
     """
     auth_options = remote_storage_args(benchmark)
     # setup storage
+    storage_api = benchmark.get_storage_api()
+    bucket_name = benchmark.get_storage_bucket_name()
+
     return get_storage(
-        str(benchmark.converter.model.storage_api),
-        auth_options,
-        str(benchmark.converter.model.storage_bucket_name),
-        StorageOptions(out_dir="out")
+        storage_api, auth_options, bucket_name, StorageOptions(out_dir="out")
     )
 
 
-def remote_storage_args(benchmark: Benchmark) -> dict:
-    if (
-        str(benchmark.converter.model.storage_api).upper() == "MINIO"
-        or str(benchmark.converter.model.storage_api).upper() == "S3"
-    ):
+def remote_storage_args(benchmark) -> dict:
+    storage_api = benchmark.get_storage_api()
+    if storage_api and (storage_api.upper() == "MINIO" or storage_api.upper() == "S3"):
         auth_options = S3_access_config_from_env()
-        if benchmark.converter.model.storage is None:
+        endpoint = benchmark.get_storage_endpoint()
+        if endpoint is None:
             return {}
         base_dic = {
-            "endpoint": benchmark.converter.model.storage,
-            "secure": (
-                True if benchmark.converter.model.storage.startswith("https") else False
-            ),
+            "endpoint": endpoint,
+            "secure": (True if endpoint.startswith("https") else False),
         }
         if "access_key" in auth_options and "secret_key" in auth_options:
             auth_dic = {
@@ -86,16 +86,16 @@ def remote_storage_args(benchmark: Benchmark) -> dict:
         return {}
 
 
-def remote_storage_snakemake_args(benchmark: Benchmark) -> dict:
-    if (
-        str(benchmark.converter.model.storage_api).upper() == "MINIO"
-        or str(benchmark.converter.model.storage_api).upper() == "S3"
-    ):
+def remote_storage_snakemake_args(benchmark) -> dict:
+    storage_api = benchmark.get_storage_api()
+    if storage_api and (storage_api.upper() == "MINIO" or storage_api.upper() == "S3"):
         auth_options = S3_access_config_from_env()
+        bucket_name = benchmark.get_storage_bucket_name()
+        endpoint = benchmark.get_storage_endpoint()
         return {
             "default-storage-provider": "s3",
-            "default-storage-prefix": f"s3://{benchmark.converter.model.storage_bucket_name}",
-            "storage-s3-endpoint-url": benchmark.converter.model.storage,
+            "default-storage-prefix": f"s3://{bucket_name}",
+            "storage-s3-endpoint-url": endpoint,
             "storage-s3-access-key": auth_options["access_key"],
             "storage-s3-secret-key": auth_options["secret_key"],
         }

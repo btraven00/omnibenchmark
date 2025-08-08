@@ -51,9 +51,9 @@ def create_benchmark_version(benchmark: str):
 
     # setup storage
     ss = get_storage(
-        str(benchmark.converter.model.storage_api),
+        benchmark.get_storage_api(),
         auth_options,
-        str(benchmark.converter.model.storage_bucket_name),
+        benchmark.get_storage_bucket_name(),
     )
     ss.set_version(benchmark.get_benchmark_version())
     if ss.version in ss.versions:
@@ -208,13 +208,9 @@ def create_policy(benchmark: str):
         yaml.safe_load(fh)
         benchmark = Benchmark(Path(benchmark))
 
-    if (
-        str(benchmark.converter.model.storage_api).upper() == "MINIO"
-        or str(benchmark.converter.model.storage_api).upper() == "S3"
-    ):
-        policy = benchmarker_access_token_policy(
-            benchmark.converter.model.storage_bucket_name
-        )
+    storage_api = benchmark.get_storage_api()
+    if storage_api and (storage_api.upper() == "MINIO" or storage_api.upper() == "S3"):
+        policy = benchmarker_access_token_policy(benchmark.get_storage_bucket_name())
         logger.error(json.dumps(policy, indent=2))
     else:
         logger.error("Error: Invalid storage type. Only MinIO/S3 storage is supported.")

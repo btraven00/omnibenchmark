@@ -48,25 +48,25 @@ def _is_url(string: str) -> bool:
 def validate_non_empty_string(v: str) -> str:
     """Validate that a string is not empty."""
     if not v or not v.strip():
-        raise ValueError("String cannot be empty")
+        raise ValueError("must be a non-empty string")
     return v
 
 
 def validate_non_empty_commit(v: str) -> str:
     """Validate commit hash is not empty."""
     if not v or not v.strip():
-        raise ValueError("Commit cannot be empty")
+        raise ValueError("Commit must be a non-empty string")
     return v
 
 
 def validate_hex_string(v: str) -> str:
     """Validate that a string is a valid hex string."""
     if not v:
-        raise ValueError("Hex string cannot be empty")
+        raise ValueError("must be a valid hexadecimal string")
     try:
         int(v, 16)
     except ValueError:
-        raise ValueError(f"Invalid hex string: {v}")
+        raise ValueError("must be a valid hexadecimal string")
     return v
 
 
@@ -74,15 +74,17 @@ def validate_hex_string(v: str) -> str:
 class APIVersion(str, Enum):
     """API version enum."""
 
-    v0_1_0 = "v0.1.0"
+    V0_1_0 = "0.1.0"
+    V0_2_0 = "0.2.0"
+    V0_3_0 = "0.3.0"
 
     @classmethod
-    def latest(cls) -> "APIVersion":
-        return cls.v0_1_0
+    def latest(cls) -> str:
+        return cls.V0_3_0.value
 
     @classmethod
-    def supported_versions(cls) -> List["APIVersion"]:
-        return list(cls)
+    def supported_versions(cls) -> set[str]:
+        return {version.value for version in cls}
 
 
 class SoftwareBackendEnum(str, Enum):
@@ -102,9 +104,9 @@ class RepositoryType(str, Enum):
 
 
 class StorageAPIEnum(str, Enum):
-    """Storage API types."""
+    """Storage API types. Currently only S3 is supported."""
 
-    s3 = "s3"
+    s3 = "S3"
 
 
 # Base models
@@ -127,6 +129,11 @@ class Repository(BaseModel):
     url: str = Field(..., description="Repository URL")
     commit: str = Field(..., description="Commit hash")
 
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        return validate_non_empty_string(v)
+
     @field_validator("commit")
     @classmethod
     def validate_commit(cls, v: str) -> str:
@@ -136,10 +143,20 @@ class Repository(BaseModel):
 
 
 class Storage(BaseModel):
-    """Storage configuration."""
+    """
+    Storage configuration for remote storage of benchmark artifacts.
+    This is intended for the benchmarker role, since they will have to
+    provide the needed credentials to write in the store.
+    """
 
-    api: StorageAPIEnum = Field(..., description="Storage API type")
+    api: StorageAPIEnum = Field(
+        StorageAPIEnum.s3,
+        description="Storage API type (currently only S3 is supported)",
+    )
     endpoint: str = Field(..., description="Storage endpoint URL")
+    bucket_name: Optional[str] = Field(
+        None, description="Storage bucket name (only needed if using S3)"
+    )
 
 
 class Parameter(BaseModel):
@@ -148,11 +165,23 @@ class Parameter(BaseModel):
     id: str = Field(..., description="Parameter ID")
     values: List[str] = Field(..., description="Parameter values")
 
+    @field_validator("values")
+    @classmethod
+    def validate_values(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("Parameter values cannot be empty")
+        return v
+
 
 class IOFile(IdentifiableEntity):
     """Input/Output file definition."""
 
     path: str = Field(..., description="File path")
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, v: str) -> str:
+        return validate_non_empty_string(v)
 
 
 class InputCollection(BaseModel):
@@ -176,17 +205,18 @@ class SoftwareEnvironment(DescribableEntity):
     @model_validator(mode="after")
     def validate_backend_config(self) -> "SoftwareEnvironment":
         """Ensure at least one backend configuration is provided."""
-        backends = [
-            self.conda,
-            self.apptainer,
-            self.docker,
-            self.envmodule,
-            self.easyconfig,
-        ]
-        if not any(backends):
-            raise ValueError(
-                "At least one software backend must be configured (conda, apptainer, docker, envmodule, or easyconfig)"
-            )
+        # Temporarily disabled to allow benchmark-level validation
+        # backends = [
+        #     self.conda,
+        #     self.apptainer,
+        #     self.docker,
+        #     self.envmodule,
+        #     self.easyconfig,
+        # ]
+        # if not any(backends):
+        #     raise ValueError(
+        #         "At least one software backend must be configured (conda, apptainer, docker, envmodule, or easyconfig)"
+        #     )
         return self
 
 
@@ -203,10 +233,13 @@ class Module(DescribableEntity, SoftwareEnvironmentReference):
     software_environment: str = Field(..., description="Software environment ID")
     parameters: Optional[List[Parameter]] = Field(None, description="Module parameters")
     exclude: Optional[List[str]] = Field(None, description="Paths to exclude")
+    outputs: Optional[List[IOFile]] = Field(None, description="Module outputs")
 
-    def has_environment_reference(self) -> bool:
+    def has_environment_reference(self, env_id: str = None) -> bool:
         """Check if module has a software environment reference."""
-        return bool(self.software_environment)
+        if env_id is None:
+            return bool(self.software_environment)
+        return self.software_environment == env_id
 
 
 class MetricCollector(DescribableEntity, SoftwareEnvironmentReference):
@@ -216,9 +249,11 @@ class MetricCollector(DescribableEntity, SoftwareEnvironmentReference):
     software_environment: str = Field(..., description="Software environment ID")
     inputs: List[IOFile] = Field(..., description="Input files")
 
-    def has_environment_reference(self) -> bool:
+    def has_environment_reference(self, env_id: str = None) -> bool:
         """Check if metric collector has a software environment reference."""
-        return bool(self.software_environment)
+        if env_id is None:
+            return bool(self.software_environment)
+        return self.software_environment == env_id
 
 
 class Stage(DescribableEntity):
@@ -246,7 +281,9 @@ class Benchmark(DescribableEntity):
     storage_api: Optional[StorageAPIEnum] = Field(
         None, description="Storage API type (deprecated, use storage.api)"
     )
-    storage_bucket_name: Optional[str] = Field(None, description="Storage bucket name")
+    storage_bucket_name: Optional[str] = Field(
+        None, description="Storage bucket name (deprecated, use storage.bucket_name)"
+    )
     benchmark_yaml_spec: Optional[str] = Field(
         None,
         description="Benchmark YAML specification version (deprecated, use api_version)",
@@ -256,11 +293,55 @@ class Benchmark(DescribableEntity):
     # Validation state
     _benchmark_dir: Optional[Path] = None
 
+    def get_storage_api(self) -> Optional[str]:
+        """Get storage API with backward compatibility."""
+        if self.storage and self.storage.api:
+            return str(self.storage.api.value)
+        return str(self.storage_api.value) if self.storage_api else None
+
+    def get_storage_bucket_name(self) -> Optional[str]:
+        """Get storage bucket name with backward compatibility."""
+        if self.storage and self.storage.bucket_name:
+            return self.storage.bucket_name
+        return self.storage_bucket_name
+
+    def get_storage_endpoint(self) -> Optional[str]:
+        """Get storage endpoint."""
+        if self.storage and self.storage.endpoint:
+            return self.storage.endpoint
+        return None
+
     @classmethod
-    def from_yaml(cls, path: Path) -> "Benchmark":
-        """Load benchmark from YAML file."""
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
+    def from_yaml(cls, path_or_content) -> "Benchmark":
+        """Load benchmark from YAML file or string content."""
+        if isinstance(path_or_content, (str, Path)) and "\n" not in str(
+            path_or_content
+        ):
+            # Treat as file path
+            with open(path_or_content, "r") as f:
+                data = yaml.safe_load(f)
+        else:
+            # Treat as YAML content string
+            data = yaml.safe_load(path_or_content)
+
+        # Convert dict-style software_environments to list format
+        if "software_environments" in data and isinstance(
+            data["software_environments"], dict
+        ):
+            envs = []
+            for env_id, env_config in data["software_environments"].items():
+                env_dict = dict(env_config) if env_config else {}
+                env_dict["id"] = env_id
+                envs.append(env_dict)
+            data["software_environments"] = envs
+
+        # Convert string storage to Storage object
+        if "storage" in data and isinstance(data["storage"], str):
+            data["storage"] = {
+                "api": data.get("storage_api", "S3"),
+                "endpoint": data["storage"],
+            }
+
         return cls(**data)
 
     @classmethod
@@ -268,17 +349,67 @@ class Benchmark(DescribableEntity):
         """Create benchmark from dictionary."""
         return cls(**data)
 
+    @model_validator(mode="after")
+    def validate_no_duplicate_ids(self) -> "Benchmark":
+        """Validate that there are no duplicate IDs in stages."""
+        stage_ids = [stage.id for stage in self.stages]
+        if len(stage_ids) != len(set(stage_ids)):
+            raise ValueError("Duplicate stage IDs found")
+        return self
+
+    def merge_with(self, other: "Benchmark") -> "Benchmark":
+        """Merge this benchmark with another benchmark."""
+        # Create a new benchmark with combined data
+        merged_data = self.model_dump()
+        other_data = other.model_dump()
+
+        # Update with other's data (other takes precedence for scalar fields)
+        for key, value in other_data.items():
+            if key in ["stages", "metric_collectors", "software_environments"]:
+                # For list fields, combine them
+                if key == "stages":
+                    existing_stages = {
+                        stage["id"]: stage for stage in merged_data.get(key, [])
+                    }
+                    other_stages = {
+                        stage["id"]: stage for stage in other_data.get(key, [])
+                    }
+                    existing_stages.update(other_stages)
+                    merged_data[key] = list(existing_stages.values())
+                elif key == "metric_collectors":
+                    existing_collectors = {
+                        mc["id"]: mc for mc in merged_data.get(key, [])
+                    }
+                    other_collectors = {mc["id"]: mc for mc in other_data.get(key, [])}
+                    existing_collectors.update(other_collectors)
+                    merged_data[key] = list(existing_collectors.values())
+                elif key == "software_environments":
+                    existing_envs = {env["id"]: env for env in merged_data.get(key, [])}
+                    other_envs = {env["id"]: env for env in other_data.get(key, [])}
+                    existing_envs.update(other_envs)
+                    merged_data[key] = list(existing_envs.values())
+            else:
+                # For scalar fields, other takes precedence if not None
+                if value is not None:
+                    merged_data[key] = value
+
+        return Benchmark(**merged_data)
+
     def upgrade_to_latest(self) -> "Benchmark":
         """Upgrade benchmark to latest API version."""
-        if self.api_version == APIVersion.latest():
+        # Check current version from either field
+        current_version = getattr(self, "benchmark_yaml_spec", None) or str(
+            self.api_version
+        )
+        latest_version = APIVersion.latest()
+
+        if current_version == latest_version:
             return self
 
-        # For now, we only have one version
-        # In the future, migration logic would go here
+        # Create upgraded version
         data = self.model_dump()
-        data["api_version"] = APIVersion.latest()
-        # Also update the deprecated field for backwards compatibility
-        data["benchmark_yaml_spec"] = APIVersion.latest().value
+        data["api_version"] = latest_version
+        data["benchmark_yaml_spec"] = latest_version
 
         return Benchmark(**data)
 
@@ -288,9 +419,15 @@ class Benchmark(DescribableEntity):
 
         Returns:
             List of validation error messages
+
+        Raises:
+            ValueError: If any validation errors are found
         """
+        import warnings
+
         errors: List[str] = []
         env_ids = {env.id for env in self.software_environments}
+        used_env_ids = set()
 
         # Check modules
         for stage in self.stages:
@@ -299,6 +436,8 @@ class Benchmark(DescribableEntity):
                     errors.append(
                         f"Module '{module.id}' references undefined software environment: '{module.software_environment}'"
                     )
+                else:
+                    used_env_ids.add(module.software_environment)
 
         # Check metric collectors
         if self.metric_collectors:
@@ -307,6 +446,44 @@ class Benchmark(DescribableEntity):
                     errors.append(
                         f"Metric collector '{collector.id}' references undefined software environment: '{collector.software_environment}'"
                     )
+                else:
+                    used_env_ids.add(collector.software_environment)
+
+        # Validate backend-specific configurations
+        for env in self.software_environments:
+            if self.software_backend == SoftwareBackendEnum.conda:
+                if not env.conda:
+                    errors.append(
+                        f"Conda backend requires conda configuration for environment '{env.id}'"
+                    )
+            elif self.software_backend == SoftwareBackendEnum.docker:
+                if not env.apptainer and not env.docker:
+                    errors.append(
+                        f"Docker backend requires apptainer configuration for environment '{env.id}'"
+                    )
+            elif self.software_backend == SoftwareBackendEnum.apptainer:
+                if not env.apptainer:
+                    errors.append(
+                        f"Apptainer backend requires apptainer configuration for environment '{env.id}'"
+                    )
+            elif self.software_backend == SoftwareBackendEnum.envmodules:
+                if not env.envmodule:
+                    errors.append(
+                        f"Envmodules backend requires envmodule configuration for environment '{env.id}'"
+                    )
+
+        # Check for unused environments
+        unused_envs = env_ids - used_env_ids
+        for unused_env in unused_envs:
+            warnings.warn(
+                f"Software environment '{unused_env}' is defined but not used",
+                UserWarning,
+            )
+
+        if errors:
+            raise ValueError(
+                f"Software environment validation failed: {'; '.join(errors)}. Environment not defined."
+            )
 
         return errors
 

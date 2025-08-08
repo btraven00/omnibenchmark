@@ -34,9 +34,9 @@ def list_files(
         auth_options = remote_storage_args(benchmark)
 
         ss = get_storage(
-            str(benchmark.converter.model.storage_api),
+            benchmark.get_storage_api(),
             auth_options,
-            str(benchmark.converter.model.storage_bucket_name),
+            benchmark.get_storage_bucket_name(),
             storage_options,
         )
         ss.set_version(benchmark.get_benchmark_version())
@@ -88,9 +88,9 @@ def download_files(
     auth_options = remote_storage_args(benchmark)
 
     ss = get_storage(
-        str(benchmark.converter.model.storage_api),
+        benchmark.get_storage_api(),
         auth_options,
-        str(benchmark.converter.model.storage_bucket_name),
+        benchmark.get_storage_bucket_name(),
     )
     ss.set_version(benchmark.get_benchmark_version())
     ss._get_objects()
