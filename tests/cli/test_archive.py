@@ -59,7 +59,7 @@ def test_archive_config(minio_storage):  # noqa: F811
 
         # Get the benchmark name and version to check the archive file
         benchmark = Benchmark(Path(minio_storage.benchmark_file))
-        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_converter().get_version()}.zip"
+        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_version()}.zip"
 
         # Check that the archive exists and contains the benchmark file
         archive_path = Path(minio_storage.out_dir) / outfile
@@ -111,7 +111,7 @@ def test_archive_code(minio_storage):  # noqa: F811
 
         # Get the benchmark name and version to check the archive file
         benchmark = Benchmark(Path(minio_storage.benchmark_file))
-        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_converter().get_version()}.zip"
+        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_version()}.zip"
 
         # Check that the archive exists and contains the benchmark file
         archive_path = Path(minio_storage.out_dir) / outfile
@@ -164,7 +164,7 @@ def test_archive_results(minio_storage):  # noqa: F811
 
         # Get the benchmark name and version to check the archive file
         benchmark = Benchmark(Path(minio_storage.benchmark_file))
-        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_converter().get_version()}.zip"
+        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_version()}.zip"
 
         # Check that the archive exists and contains the benchmark file
         archive_path = Path(minio_storage.out_dir) / outfile
@@ -218,7 +218,7 @@ def test_archive_compression(minio_storage):  # noqa: F811
 
         # Get the benchmark name and version to check the archive file
         benchmark = Benchmark(Path(minio_storage.benchmark_file))
-        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_converter().get_version()}.bz2"
+        outfile = f"{benchmark.get_benchmark_name()}_{benchmark.get_version()}.bz2"
 
         # Check that the archive exists and contains the benchmark file
         archive_path = Path(minio_storage.out_dir) / outfile

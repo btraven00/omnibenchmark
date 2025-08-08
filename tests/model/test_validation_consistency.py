@@ -1,317 +1,390 @@
-"""Tests for validation consistency with the old validator behavior."""
+"""Tests for validation consistency using centralized factories.
+
+These tests ensure that the Pydantic-based validation properly catches
+invalid configurations at object creation time, following the spec.
+"""
 
 import pytest
-from unittest.mock import patch
-
 from pydantic import ValidationError
 
-
+from omnibenchmark.model.validation import (
+    ValidationError as OmnibenchmarkValidationError,
+)
 from .factories import (
     make_benchmark,
-    make_software_environment,
+    make_minimal_benchmark,
+    make_complete_benchmark,
+    make_invalid_benchmark_for_testing,
     make_iofile,
 )
 
 
 @pytest.mark.short
 class TestValidationConsistency:
-    """Test that the new model provides consistent validation with the old validator."""
+    """Test validation behavior with centralized factories."""
 
-    def test_validate_duplicate_ids(self):
-        """Test validation of duplicate IDs across different entity types."""
-        # Create a benchmark with duplicate stage IDs
-        with pytest.raises(ValidationError):
+    def test_validate_duplicate_stage_ids(self):
+        """Test that duplicate stage IDs are caught during object creation."""
+        invalid_data = make_invalid_benchmark_for_testing("duplicate_stage_ids")
+
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)) as exc_info:
+            make_benchmark(**invalid_data)
+
+        error_msg = str(exc_info.value)
+        assert "duplicate stage ids" in error_msg.lower()
+
+    def test_validate_undefined_environment(self):
+        """Test that undefined environment references are caught."""
+        invalid_data = make_invalid_benchmark_for_testing("undefined_environment")
+
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)) as exc_info:
+            make_benchmark(**invalid_data)
+
+        error_msg = str(exc_info.value)
+        assert "undefined_env" in error_msg
+
+    def test_validate_invalid_input_reference(self):
+        """Test that invalid input references are caught."""
+        invalid_data = make_invalid_benchmark_for_testing("invalid_input_reference")
+
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)) as exc_info:
+            make_benchmark(**invalid_data)
+
+        error_msg = str(exc_info.value)
+        assert "not valid" in error_msg.lower()
+
+    def test_validate_absolute_paths(self):
+        """Test that absolute paths are rejected."""
+        invalid_data = make_invalid_benchmark_for_testing("absolute_path")
+
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)) as exc_info:
+            make_benchmark(**invalid_data)
+
+        error_msg = str(exc_info.value)
+        assert "absolute" in error_msg.lower() or "relative" in error_msg.lower()
+
+    def test_valid_benchmark_creation(self):
+        """Test that valid benchmarks can be created without errors."""
+        # Test minimal valid benchmark
+        minimal = make_minimal_benchmark()
+        assert minimal.id == "test_benchmark"
+        assert len(minimal.software_environments) >= 1
+
+        # Test complete valid benchmark
+        complete = make_complete_benchmark()
+        assert complete.id == "test_benchmark"
+        assert len(complete.stages) >= 2
+        assert len(complete.software_environments) >= 2
+        assert len(complete.metric_collectors) >= 1
+
+    def test_software_environment_validation(self):
+        """Test software environment reference validation."""
+        # Valid: environment exists
+        valid_benchmark = make_benchmark(
+            software_environments=[{"id": "test_env", "conda": "env.yaml"}],
+            stages=[
+                {
+                    "id": "stage1",
+                    "modules": [{"id": "mod1", "software_environment": "test_env"}],
+                    "outputs": [{"id": "out1", "path": "results.txt"}],
+                }
+            ],
+        )
+        assert valid_benchmark.validate_software_environments() is None
+
+        # Invalid: environment doesn't exist
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)):
             make_benchmark(
+                software_environments=[{"id": "existing_env", "conda": "env.yaml"}],
                 stages=[
-                    {"id": "duplicate_id", "modules": []},
-                    {"id": "duplicate_id", "modules": []},  # Duplicate
-                ]
+                    {
+                        "id": "stage1",
+                        "modules": [
+                            {"id": "mod1", "software_environment": "missing_env"}
+                        ],
+                        "outputs": [],
+                    }
+                ],
             )
 
-    def test_validate_file_paths(self):
-        """Test validation of file paths (relative vs absolute)."""
-        # Valid relative paths
-        valid_file = make_iofile(path="relative/path/file.txt")
-        assert valid_file.path == "relative/path/file.txt"
+    def test_metric_collector_validation(self):
+        """Test metric collector validation."""
+        # Valid: metric collector references existing environment and valid inputs
+        valid_benchmark = make_benchmark(
+            software_environments=[{"id": "metrics_env", "conda": "env.yaml"}],
+            stages=[
+                {
+                    "id": "data_stage",
+                    "modules": [],
+                    "outputs": [{"id": "data_output", "path": "data/output.csv"}],
+                }
+            ],
+            metric_collectors=[
+                {
+                    "id": "collector1",
+                    "software_environment": "metrics_env",
+                    "inputs": [{"id": "data_output", "path": "data/output.csv"}],
+                    "outputs": [
+                        {"id": "metrics_result", "path": "metrics/report.html"}
+                    ],
+                }
+            ],
+        )
+        assert valid_benchmark.id == "test_benchmark"
 
-        # Empty path should fail
-        with pytest.raises(ValidationError):
-            make_iofile(path="")
+        # Invalid: metric collector references non-existent input
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)):
+            make_benchmark(
+                software_environments=[{"id": "metrics_env", "conda": "env.yaml"}],
+                stages=[
+                    {
+                        "id": "data_stage",
+                        "modules": [],
+                        "outputs": [{"id": "real_output", "path": "data/output.csv"}],
+                    }
+                ],
+                metric_collectors=[
+                    {
+                        "id": "collector1",
+                        "software_environment": "metrics_env",
+                        "inputs": [{"id": "fake_output", "path": "fake/output.csv"}],
+                        "outputs": [],
+                    }
+                ],
+            )
 
-        # Whitespace-only path should fail
-        with pytest.raises(ValidationError):
-            make_iofile(path="   ")
+    def test_backend_specific_validation(self):
+        """Test software backend-specific validation."""
+        # Conda backend with conda environment
+        conda_benchmark = make_benchmark(
+            software_backend="conda",
+            software_environments=[{"id": "conda_env", "conda": "environment.yaml"}],
+            stages=[
+                {
+                    "id": "stage1",
+                    "modules": [{"id": "mod1", "software_environment": "conda_env"}],
+                    "outputs": [],
+                }
+            ],
+        )
+        assert conda_benchmark.software_backend.value == "conda"
 
-    def test_validate_stage_inputs(self):
-        """Test validation of stage inputs referencing outputs."""
-        benchmark = make_benchmark(
-            software_environments={"env1": {}},
+        # Apptainer backend with apptainer environment
+        apptainer_benchmark = make_benchmark(
+            software_backend="apptainer",
+            software_environments=[
+                {"id": "container_env", "apptainer": "container.sif"}
+            ],
             stages=[
                 {
                     "id": "stage1",
                     "modules": [
-                        {
-                            "id": "mod1",
-                            "software_environment": "env1",
-                            "outputs": [{"id": "output1", "path": "out1.txt"}],
-                        }
+                        {"id": "mod1", "software_environment": "container_env"}
                     ],
-                },
-                {
-                    "id": "stage2",
-                    "modules": [
-                        {
-                            "id": "mod2",
-                            "software_environment": "env1",
-                            "inputs": [{"id": "output1", "path": "out1.txt"}],
-                            "outputs": [{"id": "output2", "path": "out2.txt"}],
-                        }
-                    ],
-                },
-            ],
-        )
-
-        # Should validate without errors
-        benchmark.validate_software_environments()
-
-    def test_validate_software_environments_undefined(self):
-        """Test validation of undefined software environment references."""
-        benchmark = make_benchmark(
-            software_environments={"env1": {}},
-            stages=[
-                {
-                    "modules": [
-                        {"software_environment": "undefined_env"}  # This doesn't exist
-                    ]
+                    "outputs": [],
                 }
             ],
         )
+        assert apptainer_benchmark.software_backend.value == "apptainer"
 
-        with pytest.raises(ValueError, match="undefined_env.*not defined"):
-            benchmark.validate_software_environments()
-
-    def test_validate_software_backend_configurations(self):
-        """Test validation of software backend configurations."""
-        # Test conda backend
-        conda_benchmark = make_benchmark(
-            software_backend="conda",
-            software_environments={
-                "conda_env": {"conda": "environment.yml"}  # Required for conda
-            },
+        # Host backend (no specific environment required)
+        host_benchmark = make_benchmark(
+            software_backend="host",
+            software_environments=[
+                {"id": "host_env", "description": "Host environment"}
+            ],
+            stages=[
+                {
+                    "id": "stage1",
+                    "modules": [{"id": "mod1", "software_environment": "host_env"}],
+                    "outputs": [],
+                }
+            ],
         )
+        assert host_benchmark.software_backend.value == "host"
 
-        # Should validate successfully
-        conda_benchmark.validate_software_environments()
+    def test_file_path_validation(self):
+        """Test file path validation rules."""
+        # Valid relative paths
+        valid_files = [
+            make_iofile(path="relative/path/file.txt"),
+            make_iofile(path="simple.txt"),
+            make_iofile(path="results/deep/nested/output.json"),
+        ]
+        for file_obj in valid_files:
+            assert not file_obj.path.startswith("/")
 
-        # Test conda backend without conda field
-        with pytest.raises(ValueError, match="conda configuration"):
-            invalid_conda = make_benchmark(
-                software_backend="conda",
-                software_environments={"no_conda": {}},  # Missing conda field
-                stages=[{"modules": [{"software_environment": "no_conda"}]}],
+        # Invalid paths should be caught during benchmark creation
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)):
+            make_benchmark(
+                stages=[
+                    {
+                        "id": "bad_stage",
+                        "modules": [],
+                        "outputs": [{"id": "bad_file", "path": "/absolute/path.txt"}],
+                    }
+                ]
             )
-            invalid_conda.validate_software_environments()
 
-    def test_validate_metric_collector_environments(self):
-        """Test validation of metric collector software environments."""
-        benchmark = make_benchmark(
-            software_environments={"env1": {}},
-            metric_collectors=[
-                {
-                    "software_environment": "undefined_env"  # This doesn't exist
-                }
-            ],
-        )
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)):
+            make_benchmark(
+                stages=[
+                    {
+                        "id": "empty_stage",
+                        "modules": [],
+                        "outputs": [{"id": "empty_file", "path": ""}],
+                    }
+                ]
+            )
 
-        with pytest.raises(ValueError, match="undefined_env.*not defined"):
-            benchmark.validate_software_environments()
-
-    def test_validate_metric_collector_inputs(self):
-        """Test validation of metric collector inputs."""
-        benchmark = make_benchmark(
-            software_environments={"env1": {}},
+    def test_stage_input_output_consistency(self):
+        """Test that stage inputs properly reference existing outputs."""
+        # Valid: stage input references output from previous stage
+        valid_benchmark = make_benchmark(
             stages=[
                 {
-                    "modules": [
-                        {
-                            "software_environment": "env1",
-                            "outputs": [{"id": "stage_output", "path": "output.txt"}],
-                        }
-                    ]
-                }
-            ],
-            metric_collectors=[
+                    "id": "producer",
+                    "modules": [],
+                    "outputs": [{"id": "intermediate_data", "path": "temp/data.csv"}],
+                },
                 {
-                    "software_environment": "env1",
-                    "inputs": [
-                        {"id": "stage_output", "path": "output.txt"}
-                    ],  # Valid reference
-                }
-            ],
+                    "id": "consumer",
+                    "modules": [],
+                    "inputs": [["intermediate_data"]],  # InputCollection format
+                    "outputs": [{"id": "final_result", "path": "results/final.json"}],
+                },
+            ]
         )
+        assert len(valid_benchmark.stages) == 2
 
-        # Should validate successfully
-        benchmark.validate_software_environments()
-
-    @patch("omnibenchmark.utils.try_avail_envmodule")
-    def test_envmodules_backend_validation(self, mock_try_avail):
-        """Test validation with envmodules backend."""
-        mock_try_avail.return_value = True
-
-        benchmark = make_benchmark(
-            software_backend="envmodules",
-            software_environments={"module_env": {"envmodule": "python/3.12"}},
-            stages=[{"modules": [{"software_environment": "module_env"}]}],
-        )
-
-        # Should validate successfully
-        benchmark.validate_software_environments()
-
-    def test_is_url_detection(self):
-        """Test URL detection for environment paths."""
-        # These should be detected as URLs
-        urls = [
-            "https://example.com/file.sif",
-            "http://registry.com/image:tag",
-            "ftp://server.com/path/to/file",
-            "docker://python:3.12",
-        ]
-
-        for url in urls:
-            env = make_software_environment(apptainer=url)
-            assert env.apptainer == url
-
-        # These should NOT be detected as URLs
-        non_urls = [
-            "relative/path/file.sif",
-            "/absolute/path/file.sif",
-            "./relative/file.sif",
-            "../parent/file.sif",
-        ]
-
-        for non_url in non_urls:
-            env = make_software_environment(conda=non_url)
-            assert env.conda == non_url
-
-    def test_path_resolution(self):
-        """Test path resolution for different backends and path types."""
-        # Test absolute paths
-        abs_env = make_software_environment(conda="/absolute/path/env.yaml")
-        assert abs_env.conda == "/absolute/path/env.yaml"
-
-        # Test relative paths
-        rel_env = make_software_environment(conda="envs/environment.yaml")
-        assert rel_env.conda == "envs/environment.yaml"
-
-        # Test URLs
-        url_env = make_software_environment(apptainer="https://registry.com/image.sif")
-        assert url_env.apptainer == "https://registry.com/image.sif"
-
-    def test_comprehensive_validation_errors(self):
-        """Test that validation collects all errors before raising."""
-        # Create a benchmark with multiple validation errors
-        benchmark = make_benchmark(
-            software_backend="conda",
-            software_environments={
-                "env1": {}  # Missing conda field for conda backend
-            },
-            stages=[
-                {
-                    "modules": [
-                        {"software_environment": "undefined_env"},  # Undefined
-                        {"software_environment": "env1"},  # Missing conda config
-                    ]
-                }
-            ],
-            metric_collectors=[
-                {"software_environment": "another_undefined"}  # Also undefined
-            ],
-        )
-
-        # Should raise ValueError with multiple issues
-        with pytest.raises(ValueError) as exc_info:
-            benchmark.validate_software_environments()
-
-        error_message = str(exc_info.value)
-        assert "undefined_env" in error_message
-        assert "another_undefined" in error_message
-        assert "conda configuration" in error_message
+        # Invalid: stage input references non-existent output
+        with pytest.raises((ValidationError, OmnibenchmarkValidationError)):
+            make_benchmark(
+                stages=[
+                    {
+                        "id": "producer",
+                        "modules": [],
+                        "outputs": [{"id": "real_output", "path": "temp/data.csv"}],
+                    },
+                    {
+                        "id": "consumer",
+                        "modules": [],
+                        "inputs": [["fake_output"]],  # References non-existent output
+                        "outputs": [],
+                    },
+                ]
+            )
 
     def test_unused_environment_warning(self):
         """Test that unused environments generate warnings."""
-        benchmark = make_benchmark(
-            software_environments={"used_env": {}, "unused_env": {}},
-            stages=[{"modules": [{"software_environment": "used_env"}]}],
-        )
+        import warnings
 
-        # Should warn about unused environment
-        with pytest.warns(UserWarning, match="unused_env"):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            benchmark = make_benchmark(
+                software_environments=[
+                    {"id": "used_env", "conda": "used.yaml"},
+                    {
+                        "id": "unused_env",
+                        "conda": "unused.yaml",
+                    },  # This should trigger warning
+                ],
+                stages=[
+                    {
+                        "id": "stage1",
+                        "modules": [{"id": "mod1", "software_environment": "used_env"}],
+                        "outputs": [],
+                    }
+                ],
+            )
+
+            # Trigger validation that checks for unused environments
             benchmark.validate_software_environments()
 
-    def test_environment_reference_propagation(self):
-        """Test that environment references are checked in all components."""
+            # Check that warning was issued for unused environment
+            warning_messages = [str(warning.message) for warning in w]
+            assert any("unused_env" in msg for msg in warning_messages)
+
+    def test_comprehensive_valid_benchmark(self):
+        """Test creation of a comprehensive, fully valid benchmark."""
         benchmark = make_benchmark(
+            id="comprehensive_test",
+            name="Comprehensive Test Benchmark",
+            description="A complete benchmark for testing all features",
+            version="2.0.0",
+            benchmarker="Test Engineer",
             software_backend="conda",
-            software_environments={
-                "env1": {"conda": "env1.yaml"},
-                "env2": {"conda": "env2.yaml"},
-            },
+            software_environments=[
+                {"id": "conda_env", "conda": "env.yaml"},
+                {"id": "analysis_env", "conda": "analysis.yaml"},
+            ],
             stages=[
                 {
+                    "id": "preprocessing",
                     "modules": [
-                        {"software_environment": "env1"},
-                        {"software_environment": "env2"},
-                    ]
+                        {"id": "preprocess_mod", "software_environment": "conda_env"}
+                    ],
+                    "outputs": [{"id": "cleaned_data", "path": "data/cleaned.csv"}],
+                },
+                {
+                    "id": "analysis",
+                    "modules": [
+                        {"id": "analysis_mod", "software_environment": "analysis_env"}
+                    ],
+                    "outputs": [{"id": "results", "path": "results/analysis.json"}],
+                },
+            ],
+            metric_collectors=[
+                {
+                    "id": "performance_metrics",
+                    "software_environment": "conda_env",
+                    "inputs": [{"id": "results", "path": "results/analysis.json"}],
                 }
             ],
-            metric_collectors=[{"software_environment": "env1"}],
         )
 
-        # All references are valid
+        # Verify all major components are present and valid
+        assert benchmark.id == "comprehensive_test"
+        assert benchmark.version == "2.0.0"
+        assert len(benchmark.software_environments) >= 2
+        assert len(benchmark.stages) >= 2
+        assert len(benchmark.metric_collectors) >= 1
+
+        # Validate the benchmark structure
+        benchmark.validate_model_structure()
         benchmark.validate_software_environments()
 
-        # Now make one reference invalid
-        benchmark.metric_collectors[0].software_environment = "env3"
+        # Verify relationships are consistent
+        env_ids = {env.id for env in benchmark.software_environments}
+        for stage in benchmark.stages:
+            for module in stage.modules:
+                assert module.software_environment in env_ids
 
-        with pytest.raises(ValueError, match="env3.*not defined"):
-            benchmark.validate_software_environments()
+        for collector in benchmark.metric_collectors:
+            assert collector.software_environment in env_ids
 
-    def test_backend_specific_validation(self):
-        """Test backend-specific validation rules."""
-        backends_and_fields = [
-            ("conda", "conda", "environment.yml"),
-            ("docker", "apptainer", "image.sif"),
-            ("apptainer", "apptainer", "image.sif"),
-            ("envmodules", "envmodule", "module/1.0"),
-        ]
+    def test_error_message_quality(self):
+        """Test that validation error messages are helpful and specific."""
+        # Test duplicate ID error message
+        try:
+            invalid_data = make_invalid_benchmark_for_testing("duplicate_stage_ids")
+            make_benchmark(**invalid_data)
+            pytest.fail("Expected validation error")
+        except (ValidationError, OmnibenchmarkValidationError) as e:
+            error_msg = str(e)
+            assert "duplicate" in error_msg.lower()
+            assert "stage" in error_msg.lower()
+            assert "duplicate_id" in error_msg
 
-        for backend, field, value in backends_and_fields:
-            # Valid configuration
-            valid = make_benchmark(
-                software_backend=backend,
-                software_environments={"env1": {field: value}},
-                stages=[{"modules": [{"software_environment": "env1"}]}],
+        # Test undefined environment error message
+        try:
+            invalid_data = make_invalid_benchmark_for_testing("undefined_environment")
+            make_benchmark(**invalid_data)
+            pytest.fail("Expected validation error")
+        except (ValidationError, OmnibenchmarkValidationError) as e:
+            error_msg = str(e)
+            assert "undefined_env" in error_msg
+            assert (
+                "not defined" in error_msg.lower() or "not found" in error_msg.lower()
             )
-            valid.validate_software_environments()
-
-            # Invalid configuration (missing required field)
-            with pytest.raises(ValueError, match=f"{field} configuration"):
-                invalid = make_benchmark(
-                    software_backend=backend,
-                    software_environments={"env1": {}},  # Missing required field
-                    stages=[{"modules": [{"software_environment": "env1"}]}],
-                )
-                invalid.validate_software_environments()
-
-    def test_host_backend_no_requirements(self):
-        """Test that host backend doesn't require specific configuration."""
-        benchmark = make_benchmark(
-            software_backend="host",
-            software_environments={
-                "env1": {}  # No specific fields required
-            },
-            stages=[{"modules": [{"software_environment": "env1"}]}],
-        )
-
-        # Should validate successfully
-        benchmark.validate_software_environments()

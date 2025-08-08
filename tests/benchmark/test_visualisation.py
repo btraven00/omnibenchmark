@@ -6,7 +6,8 @@ import pytest
 from omnibenchmark.dag import DiGraph
 from pathlib import Path
 
-from omnibenchmark.benchmark import Benchmark, benchmark_dag as dag
+from omnibenchmark.benchmark import Benchmark
+from omnibenchmark.benchmark._dot import export_to_dot as dag_export_to_dot
 
 
 @pytest.mark.short
@@ -31,21 +32,21 @@ def test_export_computational_to_dot():
 @pytest.mark.timeout(60)
 def test_export_computational_to_dot_scaling():
     Glarge = generate_graph(100)
-    dot = dag.export_to_dot(
+    dot = dag_export_to_dot(
         Glarge,
         title="Large Graph (100 nodes)",
     )
     dot.write("large_graph.dot")
 
     Gmedium = generate_graph(50)
-    dot = dag.export_to_dot(
+    dot = dag_export_to_dot(
         Gmedium,
         title="Medium Graph (50 nodes)",
     )
     dot.write("medium_graph.dot")
 
     Gsmall = generate_graph(10)
-    dot = dag.export_to_dot(
+    dot = dag_export_to_dot(
         Gsmall,
         title="Small Graph (10 nodes)",
     )

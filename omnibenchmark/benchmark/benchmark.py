@@ -55,12 +55,6 @@ class BenchmarkExecution:
 
         self.execution_paths = None
 
-    def get_converter(self):
-        # Create converter on demand for compatibility
-        from omnibenchmark.model import BenchmarkConverter
-
-        return BenchmarkConverter(self.context.path)
-
     def get_storage_api(self) -> Optional[str]:
         """Get storage API with backward compatibility."""
         return self.model.get_storage_api()
@@ -104,11 +98,11 @@ class BenchmarkExecution:
     def get_conda_envs(self):
         return self.model.get_conda_envs()
 
-    def get_nodes(self):
-        return list(self.G.nodes)
-
     def get_stages(self):
         return self.model.get_stages()
+
+    def get_nodes(self):
+        return list(self.G.nodes)
 
     def get_node_by_id(self, node_id):
         return graph.find_node_by_id(self.G, node_id)

@@ -144,7 +144,7 @@ storage_api: S3
 storage_bucket_name: example_storage_bucket_name
 
 # optional (string), Benchmark YAML specification version (deprecated, use api_version)
-benchmark_yaml_spec: example_benchmark_yaml_spec
+benchmark_yaml_spec: 0.0
 
 # optional (APIVersion), default: 0.3.0, API version, options: 0.1.0, 0.2.0, 0.3.0
 api_version: 0.3.0

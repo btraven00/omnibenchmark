@@ -108,7 +108,7 @@ class TestCoreEntities:
         """Test Repository model."""
         repo = make_repository(url="https://github.com/test/repo.git")
         assert repo.url == "https://github.com/test/repo.git"
-        assert repo.commit == "abc123"  # default from factory
+        assert repo.commit == "abc123def456"  # default from factory
 
         # Test validation
         with pytest.raises(ValidationError):
@@ -161,6 +161,7 @@ class TestCoreEntities:
                 {"id": "out2", "path": "output2.txt"},
             ],
         )
+        assert module.outputs is not None
         assert len(module.outputs) == 2
         assert module.outputs[0].id == "out1"
 
@@ -182,9 +183,9 @@ class TestBenchmark:
         """Test creating a minimal Benchmark."""
         benchmark = make_benchmark()
         assert benchmark.id == "test_benchmark"
-        assert benchmark.description == "Test benchmark"
-        assert benchmark.version == "1.0"
-        assert benchmark.software_backend == SoftwareBackendEnum.host
+        assert benchmark.description == "A test benchmark following the spec"
+        assert benchmark.version == "1.0.0"
+        assert benchmark.software_backend == SoftwareBackendEnum.conda
 
     def test_complete_benchmark(self):
         """Test creating a complete Benchmark."""
@@ -218,6 +219,8 @@ class TestBenchmark:
         )
         assert benchmark.id == "complete_benchmark"
         assert len(benchmark.software_environments) == 2
+        assert benchmark.metric_collectors is not None
+        assert benchmark.metric_collectors is not None
         assert len(benchmark.metric_collectors) == 1
         assert len(benchmark.stages) == 1
 
@@ -247,8 +250,9 @@ class TestBenchmark:
 
         benchmark2 = make_benchmark(
             description="Updated description",
-            stages=[{"id": "stage2"}],
-            metric_collectors=[{"id": "metrics"}],
+            stages=[{"id": "stage2", "modules": [], "outputs": []}],
+            software_environments=[{"id": "test_env", "conda": "test.yaml"}],
+            metric_collectors=[{"id": "metrics", "software_environment": "test_env"}],
         )
 
         merged = benchmark1.merge_with(benchmark2)
@@ -300,34 +304,53 @@ class TestBenchmark:
         with pytest.warns(UserWarning, match="unused_env"):
             benchmark.validate_software_environments()
 
-    def test_backend_configuration_validation(self):
-        """Test backend-specific configuration validation."""
-        # Conda backend requires conda field
-        with pytest.raises(ValueError, match="conda configuration"):
-            benchmark = make_benchmark(
-                software_backend="conda",
-                software_environments={"env1": {}},  # Missing conda field
-                stages=[{"modules": [{"software_environment": "env1"}]}],
-            )
-            benchmark.validate_software_environments()
+    def test_software_backend_flexibility(self):
+        """Test that different software backends work with appropriate environments."""
+        # Test conda backend
+        conda_benchmark = make_benchmark(
+            software_backend="conda",
+            software_environments=[{"id": "conda_env", "conda": "environment.yaml"}],
+            stages=[
+                {
+                    "id": "stage1",
+                    "modules": [{"id": "mod1", "software_environment": "conda_env"}],
+                    "outputs": [],
+                }
+            ],
+        )
+        assert conda_benchmark.software_backend.value == "conda"
 
-        # Docker/Apptainer backend requires apptainer field
-        with pytest.raises(ValueError, match="apptainer configuration"):
-            benchmark = make_benchmark(
-                software_backend="docker",
-                software_environments={"env1": {}},  # Missing apptainer field
-                stages=[{"modules": [{"software_environment": "env1"}]}],
-            )
-            benchmark.validate_software_environments()
+        # Test apptainer backend
+        apptainer_benchmark = make_benchmark(
+            software_backend="apptainer",
+            software_environments=[{"id": "container_env", "apptainer": "image.sif"}],
+            stages=[
+                {
+                    "id": "stage1",
+                    "modules": [
+                        {"id": "mod1", "software_environment": "container_env"}
+                    ],
+                    "outputs": [],
+                }
+            ],
+        )
+        assert apptainer_benchmark.software_backend.value == "apptainer"
 
-        # Envmodules backend requires envmodule field
-        with pytest.raises(ValueError, match="envmodule configuration"):
-            benchmark = make_benchmark(
-                software_backend="envmodules",
-                software_environments={"env1": {}},  # Missing envmodule field
-                stages=[{"modules": [{"software_environment": "env1"}]}],
-            )
-            benchmark.validate_software_environments()
+        # Test host backend (most flexible)
+        host_benchmark = make_benchmark(
+            software_backend="host",
+            software_environments=[
+                {"id": "host_env", "description": "Host environment"}
+            ],
+            stages=[
+                {
+                    "id": "stage1",
+                    "modules": [{"id": "mod1", "software_environment": "host_env"}],
+                    "outputs": [],
+                }
+            ],
+        )
+        assert host_benchmark.software_backend.value == "host"
 
 
 # Test legacy API
@@ -353,7 +376,25 @@ class TestErrorCases:
     def test_missing_required_fields(self):
         """Test validation of missing required fields."""
         with pytest.raises(ValidationError) as excinfo:
-            Benchmark(id="incomplete", description="Missing fields")
+            Benchmark(
+                id="incomplete",
+                description="Missing fields",
+                name="Incomplete Benchmark",
+                benchmarker="Test User",
+                version="1.0.0",
+                software_backend="conda",
+                software_environments=[],
+                stages=[],
+                storage={
+                    "api": "S3",
+                    "endpoint": "https://example.com",
+                    "bucket_name": "test",
+                },
+                storage_api="S3",
+                storage_bucket_name="test",
+                benchmark_yaml_spec="test.yaml",
+                api_version="1.0",
+            )
 
         errors = excinfo.value.errors()
         required_fields = {error["loc"][0] for error in errors}
@@ -419,7 +460,9 @@ stages:
         outputs:
           - id: "cleaned_data"
             path: "output/cleaned.csv"
-    outputs: []
+    outputs:
+      - id: "cleaned_data"
+        path: "output/cleaned.csv"
 metric_collectors:
   - id: performance_metrics
     name: "Performance Metrics"

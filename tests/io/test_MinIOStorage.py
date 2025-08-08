@@ -234,7 +234,7 @@ class TestMinIOStorage:
             yaml.safe_load(fh)
             benchmark = Benchmark(Path(benchmark_file))
 
-        benchmark.converter.model.software_backend = SoftwareBackendEnum("conda")
+        benchmark.software_backend = SoftwareBackendEnum("conda")
 
         client.set_version("0.3")
         client.create_new_version(benchmark)

@@ -29,10 +29,8 @@ from omnibenchmark.model.benchmark import (
     validate_non_empty_commit,
     validate_hex_string,
 )
-from omnibenchmark.model.converter import (
-    BenchmarkConverter,
-    LinkMLConverter,  # Alias for backwards compatibility
-)
+
+# Converter classes removed - use Benchmark class directly instead
 from omnibenchmark.model.validation import (
     ValidationError,
     BenchmarkValidator,
@@ -67,9 +65,6 @@ __all__ = [
     "ValidationError",
     # Validators
     "BenchmarkValidator",
-    # Converters
-    "BenchmarkConverter",
-    "LinkMLConverter",
     # Module metadata
     "DerivedSoftware",
     "ModuleMetadata",

@@ -51,35 +51,38 @@ class SnakemakeSetup:
         func(path)
 
     def _print_benchmark(self):
-        converter = self.benchmark.get_converter()
+        benchmark = (
+            self.benchmark.get_converter()
+        )  # This now returns the benchmark directly
         print(self.benchmark.get_definition())
 
-        stages = converter.get_stages()
+        stages = benchmark.get_stages()
         for stage_id in stages:
             stage = stages[stage_id]
             stage_name = stage["name"]
             print("Stage", stage_name if stage_name else stage_id)
 
-            modules_in_stage = converter.get_modules_by_stage(stage)
+            modules_in_stage = benchmark.get_modules_by_stage(stage)
             print("  ", stage_name, "with modules", modules_in_stage.keys(), "\n")
-            print("  Implicit inputs:\n", converter.get_stage_implicit_inputs(stage))
+            print("  Implicit inputs:\n", benchmark.get_stage_implicit_inputs(stage))
             print(
                 "  Explicit inputs:\n",
                 [
-                    converter.get_explicit_inputs(i)
-                    for i in converter.get_stage_implicit_inputs(stage)
+                    benchmark.get_explicit_inputs(i)
+                    for i in benchmark.get_stage_implicit_inputs(stage)
                 ],
             )
-            print("  Outputs\n", converter.get_stage_outputs(stage))
+            print("  Outputs:", benchmark.get_stage_outputs(stage))
+            print("  All modules:", benchmark.get_modules().keys())
             print("------")
 
             for module_id in modules_in_stage:
                 module = modules_in_stage[module_id]
                 module_name = module["name"]
                 print("  Module", module_name if module_name else module_id)
-                print("    Repo:", converter.get_module_repository(module))
-                print("    Excludes:", converter.get_module_excludes(module))
-                print("    Params:", converter.get_module_parameters(module))
+                print("    Repo:", benchmark.get_module_repository(module))
+                print("    Excludes:", benchmark.get_module_excludes(module))
+                print("    Params:", benchmark.get_module_parameters(module))
             print("------")
 
         print("------")

@@ -74,6 +74,8 @@ def generate_yaml_template(model_cls, indent=0, schema_defs=None):
         "hash": "c0ffee4",
         "sha": "c0ffee4",
         "commit_hash": "c0ffee4",
+        "benchmark_yaml_spec": "0.0",
+        "storage_api": "...",
     }
 
     for name, prop in schema.get("properties", {}).items():
