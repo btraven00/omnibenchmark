@@ -8,7 +8,7 @@ id: example_id
 name: example benchmark
 
 # optional (string), Description of the entity
-description: This is an example benchmark description
+description: A more verbose description, for humans reading this
 
 # required (string), Benchmark author
 benchmarker: Your Name
@@ -29,7 +29,7 @@ software_environments:
     name: example benchmark
 
     # optional (string), Description of the entity
-    description: This is an example benchmark description
+    description: A more verbose description, for humans reading this
 
     # optional (Repository)
     repository:
@@ -69,7 +69,7 @@ stages:
     name: example benchmark
 
     # optional (string), Description of the entity
-    description: This is an example benchmark description
+    description: A more verbose description, for humans reading this
 
     # required (array), Modules in this stage
     modules:
@@ -84,7 +84,7 @@ stages:
         name: example benchmark
 
         # optional (string), Description of the entity
-        description: This is an example benchmark description
+        description: A more verbose description, for humans reading this
 
         # required (Repository), Module repository
         repository:
@@ -125,7 +125,7 @@ stages:
 # optional (array), Metric collectors
 metric_collectors: ...
 
-# optional (Storage), Storage configuration
+# optional (Storage), Remote storage configuration
 storage:
   # optional (StorageAPIEnum), Storage API type (currently only S3 is supported), options: S3
   api: S3

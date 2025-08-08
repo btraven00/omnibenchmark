@@ -79,8 +79,8 @@ class APIVersion(str, Enum):
     V0_3_0 = "0.3.0"
 
     @classmethod
-    def latest(cls) -> str:
-        return cls.V0_3_0.value
+    def latest(cls) -> "APIVersion":
+        return cls.V0_3_0
 
     @classmethod
     def supported_versions(cls) -> set[str]:
@@ -277,7 +277,7 @@ class Benchmark(DescribableEntity):
     metric_collectors: Optional[List[MetricCollector]] = Field(
         None, description="Metric collectors"
     )
-    storage: Optional[Storage] = Field(None, description="Storage configuration")
+    storage: Optional[Storage] = Field(None, description="Remote storage configuration")
     storage_api: Optional[StorageAPIEnum] = Field(
         None, description="Storage API type (deprecated, use storage.api)"
     )
@@ -288,7 +288,18 @@ class Benchmark(DescribableEntity):
         None,
         description="Benchmark YAML specification version (deprecated, use api_version)",
     )
-    api_version: APIVersion = Field(APIVersion.latest(), description="API version")
+    api_version: APIVersion = Field(APIVersion.V0_3_0, description="API version")
+
+    @field_validator("api_version", mode="before")
+    @classmethod
+    def validate_api_version(cls, v):
+        """Convert string API version to enum."""
+        if isinstance(v, str):
+            for version in APIVersion:
+                if version.value == v:
+                    return version
+            # If no match found, let Pydantic handle the error
+        return v
 
     # Validation state
     _benchmark_dir: Optional[Path] = None
