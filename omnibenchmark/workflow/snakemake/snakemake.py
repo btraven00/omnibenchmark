@@ -98,7 +98,7 @@ class SnakemakeEngine(WorkflowEngine):
         benchmark: Benchmark,
         output_dir: Path = Path(os.getcwd()),
         write_to_disk=True,
-        local_timeout=1000,
+        local_timeout: Optional[int] = 1000,
     ) -> Path:
         """
         Serializes a Snakefile for the benchmark.
@@ -146,7 +146,7 @@ class SnakemakeEngine(WorkflowEngine):
             f.write("nodes = benchmark.get_nodes()\n")
             f.write("for node in nodes:\n")
             f.write(
-                f"    create_node_rule(node, benchmark, config, {local_timeout})\n\n"
+                f"    create_node_rule(node, benchmark, config, {local_timeout or 1000})\n\n"
             )
 
             # Create metric collector rules
@@ -171,6 +171,7 @@ class SnakemakeEngine(WorkflowEngine):
         backend: SoftwareBackendEnum = SoftwareBackendEnum.host,
         module_path: str = os.environ.get("MODULEPATH", ""),
         work_dir: Path = Path(os.getcwd()),
+        benchmark_file_path: Optional[Path] = None,
         **snakemake_kwargs,
     ) -> bool:
         """
@@ -197,7 +198,9 @@ class SnakemakeEngine(WorkflowEngine):
         os.makedirs(work_dir, exist_ok=True)
 
         # Serialize Snakefile for node workflow
-        snakefile = self.serialize_node_workflow(node, work_dir, write_to_disk=True)
+        snakefile = self.serialize_node_workflow(
+            node, work_dir, write_to_disk=True, benchmark_file_path=benchmark_file_path
+        )
 
         # Prepare the argv list
         argv = self._prepare_argv(
@@ -228,7 +231,8 @@ class SnakemakeEngine(WorkflowEngine):
         self,
         node: BenchmarkNode,
         output_dir: Path = Path(os.getcwd()),
-        write_to_disk=True,
+        write_to_disk: bool = True,
+        benchmark_file_path: Optional[Path] = None,
     ) -> Path:
         """
         Serializes a Snakefile for a benchmark node.
@@ -243,7 +247,11 @@ class SnakemakeEngine(WorkflowEngine):
         """
         os.makedirs(output_dir, exist_ok=True)
 
-        benchmark_file = node.get_definition_file()
+        benchmark_file = benchmark_file_path or node.get_definition_file()
+        if benchmark_file is None:
+            raise ValueError(
+                "benchmark_file_path must be provided when node.get_definition_file() returns None"
+            )
         name = node.get_benchmark_name()
         version = node.get_benchmark_version()
         author = node.get_benchmark_author()

@@ -77,9 +77,10 @@ class WorkflowEngine(metaclass=ABCMeta):
         dryrun: bool = False,
         continue_on_error: bool = False,
         keep_module_logs: bool = False,
-        backend: SoftwareBackendEnum = SoftwareBackendEnum.host,
-        module_path: str = os.environ.get("MODULEPATH", ""),
-        work_dir: Path = Path(os.getcwd()),
+        backend: SoftwareBackendEnum = SoftwareBackendEnum.conda,
+        executor: str = "local",
+        debug: bool = False,
+        benchmark_file_path: Optional[Path] = None,
         **kwargs,
     ) -> bool:
         """
@@ -106,7 +107,11 @@ class WorkflowEngine(metaclass=ABCMeta):
 
     @abstractmethod
     def serialize_node_workflow(
-        self, node: BenchmarkNode, output_dir: Path = Path(os.getcwd())
+        self,
+        node: BenchmarkNode,
+        output_dir: Path = Path(os.getcwd()),
+        write_to_disk: bool = True,
+        benchmark_file_path: Optional[Path] = None,
     ) -> Path:
         """
         Serializes a workflow file for a benchmark node.
@@ -114,6 +119,8 @@ class WorkflowEngine(metaclass=ABCMeta):
         Args:
             node (BenchmarkNode): benchmark node to serialize
             output_dir (str): output directory for the workflow file
+            write_to_disk (bool): whether to write to disk or create temp file
+            benchmark_file_path (Optional[Path]): path to benchmark file, if None uses node.get_definition_file()
 
         Returns:
         - Workflow file path.

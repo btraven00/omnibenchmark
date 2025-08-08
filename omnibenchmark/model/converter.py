@@ -141,7 +141,7 @@ class BenchmarkConverter:
         Raises:
             ValidationError: If validation fails
         """
-        self.model.validate_structure(benchmark_dir)
+        self.model.validate_execution_context(benchmark_dir)
         return self
 
 

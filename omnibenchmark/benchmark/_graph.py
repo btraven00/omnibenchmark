@@ -7,31 +7,31 @@ from omnibenchmark.dag import (
     all_simple_paths,
     NetworkXUnfeasible,
 )
-from omnibenchmark.model import BenchmarkConverter, Stage, ValidationError
+from omnibenchmark.model import Benchmark, Stage, ValidationError
 
 from ._node import BenchmarkNode
 
 
 def expand_stage_nodes(
-    converter: BenchmarkConverter,
+    model: Benchmark,
     stage: "Stage",
     out_dir: Path,
     stage_ordering: List[str],
 ) -> List[BenchmarkNode]:
     nodes = []
 
-    input_dirname = str(out_dir) if converter.is_initial(stage) else "{pre}"
-    stage_outputs = converter.get_stage_outputs(stage).values()
+    input_dirname = str(out_dir) if model.is_initial(stage) else "{pre}"
+    stage_outputs = model.get_stage_outputs(stage).values()
     outputs = [x.replace("{input}", input_dirname) for x in stage_outputs]
 
-    inputs_for_stage = converter.get_stage_implicit_inputs(stage)
+    inputs_for_stage = model.get_stage_implicit_inputs(stage)
     if not inputs_for_stage or len(inputs_for_stage) == 0:
         inputs_for_stage = [None]
 
-    modules_in_stage = converter.get_modules_by_stage(stage)
+    modules_in_stage = model.get_modules_by_stage(stage)
     for module_id in modules_in_stage:
         module = modules_in_stage[module_id]
-        parameters = converter.get_module_parameters(module)
+        parameters = model.get_module_parameters(module)
         if not parameters or len(parameters) == 0:
             parameters = [None]
 
@@ -44,7 +44,7 @@ def expand_stage_nodes(
                             [
                                 stage.id
                                 for input_id in inputs
-                                for stage in [converter.get_stage_by_output(input_id)]
+                                for stage in [model.get_stage_by_output(input_id)]
                                 if stage is not None
                             ]
                         )
@@ -52,14 +52,14 @@ def expand_stage_nodes(
                     latest_stage = sorted(stages_by_output, key=stage_ordering.index)[
                         -1
                     ]
-                    explicit_inputs = converter.get_explicit_inputs(inputs)
+                    explicit_inputs = model.get_explicit_inputs(inputs)
                     inputs = {
                         k: v.replace("{input}", "{pre}")
                         for k, v in explicit_inputs.items()
                     }
 
                 node = BenchmarkNode(
-                    converter,
+                    model,
                     stage,
                     module,
                     param,
@@ -72,15 +72,15 @@ def expand_stage_nodes(
     return nodes
 
 
-def build_benchmark_dag(converter: BenchmarkConverter, out_dir: Path) -> DiGraph:
+def build_benchmark_dag(model: Benchmark, out_dir: Path) -> DiGraph:
     g = DiGraph()
 
-    G_stages = build_stage_dag(converter)
+    G_stages = build_stage_dag(model)
     stage_ordering = compute_stage_order(G_stages)
 
     stage_nodes_map = {}
-    for stage_id, stage in converter.get_stages().items():
-        nodes = expand_stage_nodes(converter, stage, out_dir, stage_ordering)
+    for stage_id, stage in model.get_stages().items():
+        nodes = expand_stage_nodes(model, stage, out_dir, stage_ordering)
         nodes_with_stage = [(node, {"stage": stage_id}) for node in nodes]
         g.add_nodes_from(nodes_with_stage)
         stage_nodes_map[stage_id] = nodes
@@ -95,15 +95,15 @@ def build_benchmark_dag(converter: BenchmarkConverter, out_dir: Path) -> DiGraph
     return g
 
 
-def build_stage_dag(converter: BenchmarkConverter) -> DiGraph:
+def build_stage_dag(model: Benchmark) -> DiGraph:
     g = DiGraph()
 
-    for stage_id, stage in converter.get_stages().items():
+    for stage_id, stage in model.get_stages().items():
         g.add_node(stage_id)
         input_ids = [
             input_id for input in (stage.inputs or []) for input_id in input.entries
         ]
-        dep_stages = [converter.get_output_stage(input_id) for input_id in input_ids]
+        dep_stages = [model.get_output_stage(input_id) for input_id in input_ids]
         for dep in dep_stages:
             if dep is not None:
                 g.add_edge(dep.id, stage.id)

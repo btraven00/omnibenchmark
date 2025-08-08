@@ -10,10 +10,7 @@ from omnibenchmark.benchmark._paths import (
 )
 
 from omnibenchmark.benchmark import _graph as graph
-from omnibenchmark.model import (
-    Benchmark as BenchmarkModel,
-    BenchmarkConverter,
-)
+from omnibenchmark.model import Benchmark as BenchmarkModel
 from omnibenchmark.utils import format_mc_output
 
 from ._dot import export_to_dot
@@ -52,14 +49,15 @@ class BenchmarkExecution:
         # Pure model validation happens automatically via Pydantic
         self.model.validate_execution_context(self.context.directory)
 
-        # Create converter for DAG building (temporary until DAG is refactored)
-        converter = BenchmarkConverter(benchmark_yaml)
-        self.G = graph.build_benchmark_dag(converter, self.context.out_dir)
+        # Build DAG directly from model
+        self.G = graph.build_benchmark_dag(self.model, self.context.out_dir)
 
         self.execution_paths = None
 
     def get_converter(self):
         # Create converter on demand for compatibility
+        from omnibenchmark.model import BenchmarkConverter
+
         return BenchmarkConverter(self.context.path)
 
     def get_storage_api(self) -> Optional[str]:

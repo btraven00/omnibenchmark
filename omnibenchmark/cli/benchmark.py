@@ -58,40 +58,42 @@ def diff_benchmark(ctx, benchmark, version1, version2):
 
     auth_options = remote_storage_args(benchmark)
 
+    api = benchmark.get_storage_api()
+    bucket = benchmark.get_storage_bucket_name()
+    if api is None or bucket is None:
+        raise (ValueError)
     # setup storage
-    ss = get_storage(
-        benchmark.get_storage_api(),
-        auth_options,
-        benchmark.get_storage_bucket_name(),
-    )
+    #
+    # TODO: use walrus
+    ss = get_storage(api, auth_options, bucket)
+    if ss is not None:
+        # get objects for first version
+        ss.set_version(version1)
+        ss._get_objects()
+        files_v1 = [
+            f"{f[0]}   {f[1]['size']}   {datetime.fromisoformat(f[1]['last_modified']).strftime('%Y-%m-%d %H:%M:%S')}\n"
+            for f in ss.files.items()
+        ]
+        if f"versions/{version1}.csv" in ss.files.keys():
+            creation_time_v1 = datetime.fromisoformat(
+                ss.files[f"versions/{version1}.csv"]["last_modified"]
+            ).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            creation_time_v1 = ""
 
-    # get objects for first version
-    ss.set_version(version1)
-    ss._get_objects()
-    files_v1 = [
-        f"{f[0]}   {f[1]['size']}   {datetime.fromisoformat(f[1]['last_modified']).strftime('%Y-%m-%d %H:%M:%S')}\n"
-        for f in ss.files.items()
-    ]
-    if f"versions/{version1}.csv" in ss.files.keys():
-        creation_time_v1 = datetime.fromisoformat(
-            ss.files[f"versions/{version1}.csv"]["last_modified"]
-        ).strftime("%Y-%m-%d %H:%M:%S")
-    else:
-        creation_time_v1 = ""
-
-    # get objects for second version
-    ss.set_version(version2)
-    ss._get_objects()
-    files_v2 = [
-        f"{f[0]}   {f[1]['size']}   {datetime.fromisoformat(f[1]['last_modified']).strftime('%Y-%m-%d %H:%M:%S')}\n"
-        for f in ss.files.items()
-    ]
-    if f"versions/{version2}.csv" in ss.files.keys():
-        creation_time_v2 = datetime.fromisoformat(
-            ss.files[f"versions/{version2}.csv"]["last_modified"]
-        ).strftime("%Y-%m-%d %H:%M:%S")
-    else:
-        creation_time_v2 = ""
+        # get objects for second version
+        ss.set_version(version2)
+        ss._get_objects()
+        files_v2 = [
+            f"{f[0]}   {f[1]['size']}   {datetime.fromisoformat(f[1]['last_modified']).strftime('%Y-%m-%d %H:%M:%S')}\n"
+            for f in ss.files.items()
+        ]
+        if f"versions/{version2}.csv" in ss.files.keys():
+            creation_time_v2 = datetime.fromisoformat(
+                ss.files[f"versions/{version2}.csv"]["last_modified"]
+            ).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            creation_time_v2 = ""
 
     # diff the two versions
     click.echo(
@@ -130,12 +132,18 @@ def list_versions(ctx, benchmark):
 
     auth_options = remote_storage_args(benchmark)
 
+    api = benchmark.get_storage_api()
+    bucket = benchmark.get_storage_bucket_name()
+
+    if api is None:
+        raise ValueError("No storage API found")
+    if bucket is None:
+        raise ValueError("No storage bucket found")
+
     # setup storage
-    ss = get_storage(
-        benchmark.get_storage_api(),
-        auth_options,
-        benchmark.get_storage_bucket_name(),
-    )
+    ss = get_storage(api, auth_options, bucket)
+    if ss is None:
+        raise ValueError("No storage found")
 
     if len(ss.versions) > 0:
         if len(ss.versions) > 1:

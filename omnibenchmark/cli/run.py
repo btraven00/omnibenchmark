@@ -379,6 +379,7 @@ def run_module(
             keep_module_logs=keep_module_logs,
             backend=b.get_benchmark_software_backend(),
             executor=executor,
+            benchmark_file_path=b.get_definition_file(),
             **extra_args,
         )
 
