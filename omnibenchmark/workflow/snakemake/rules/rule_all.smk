@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import List
 
-from omni_schema.datamodel.omni_schema import MetricCollector, SoftwareBackendEnum
+from omnibenchmark.model import MetricCollector, SoftwareBackendEnum
 
 from omnibenchmark.benchmark import Benchmark, Validator
 from omnibenchmark.workflow.snakemake import scripts

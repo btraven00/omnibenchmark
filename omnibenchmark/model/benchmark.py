@@ -9,20 +9,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from omnibenchmark.utils import merge_dict_list  # type: ignore[import]
-
-
-class ValidationError(Exception):
-    """Exception raised for validation errors."""
-
-    def __init__(self, *errors: Any) -> None:
-        self.errors = errors[0] if len(errors) == 1 else errors
-        super().__init__(*errors)
-
-    def __str__(self) -> str:
-        if isinstance(self.errors, str):
-            return self.errors
-        else:
-            return "\n".join(map(str, self.errors))
+from .validation import BenchmarkValidator, ValidationError
 
 
 def _find_duplicates(items: List[str]) -> List[str]:
@@ -235,7 +222,7 @@ class Module(DescribableEntity, SoftwareEnvironmentReference):
     exclude: Optional[List[str]] = Field(None, description="Paths to exclude")
     outputs: Optional[List[IOFile]] = Field(None, description="Module outputs")
 
-    def has_environment_reference(self, env_id: str = None) -> bool:
+    def has_environment_reference(self, env_id: Optional[str] = None) -> bool:
         """Check if module has a software environment reference."""
         if env_id is None:
             return bool(self.software_environment)
@@ -248,8 +235,9 @@ class MetricCollector(DescribableEntity, SoftwareEnvironmentReference):
     repository: Repository = Field(..., description="Repository information")
     software_environment: str = Field(..., description="Software environment ID")
     inputs: List[IOFile] = Field(..., description="Input files")
+    outputs: List[IOFile] = Field(..., description="Output files")
 
-    def has_environment_reference(self, env_id: str = None) -> bool:
+    def has_environment_reference(self, env_id: Optional[str] = None) -> bool:
         """Check if metric collector has a software environment reference."""
         if env_id is None:
             return bool(self.software_environment)
@@ -264,7 +252,7 @@ class Stage(DescribableEntity):
     outputs: List[IOFile] = Field(..., description="Stage outputs")
 
 
-class Benchmark(DescribableEntity):
+class Benchmark(DescribableEntity, BenchmarkValidator):
     """Main benchmark definition."""
 
     benchmarker: str = Field(..., description="Benchmark author")
@@ -292,38 +280,20 @@ class Benchmark(DescribableEntity):
 
     @field_validator("api_version", mode="before")
     @classmethod
-    def validate_api_version(cls, v):
+    def validate_api_version(cls, v: Union[str, APIVersion]) -> APIVersion:
         """Convert string API version to enum."""
         if isinstance(v, str):
             for version in APIVersion:
                 if version.value == v:
                     return version
-            # If no match found, let Pydantic handle the error
+            # If no match found, raise ValueError
+            raise ValueError(f"Invalid API version: {v}")
         return v
 
-    # Validation state
-    _benchmark_dir: Optional[Path] = None
-
-    def get_storage_api(self) -> Optional[str]:
-        """Get storage API with backward compatibility."""
-        if self.storage and self.storage.api:
-            return str(self.storage.api.value)
-        return str(self.storage_api.value) if self.storage_api else None
-
-    def get_storage_bucket_name(self) -> Optional[str]:
-        """Get storage bucket name with backward compatibility."""
-        if self.storage and self.storage.bucket_name:
-            return self.storage.bucket_name
-        return self.storage_bucket_name
-
-    def get_storage_endpoint(self) -> Optional[str]:
-        """Get storage endpoint."""
-        if self.storage and self.storage.endpoint:
-            return self.storage.endpoint
-        return None
+    # _benchmark_dir: Optional[Path] = None
 
     @classmethod
-    def from_yaml(cls, path_or_content) -> "Benchmark":
+    def from_yaml(cls, path_or_content: Union[str, Path]) -> "Benchmark":
         """Load benchmark from YAML file or string content."""
         if isinstance(path_or_content, (str, Path)) and "\n" not in str(
             path_or_content
@@ -333,13 +303,13 @@ class Benchmark(DescribableEntity):
                 data = yaml.safe_load(f)
         else:
             # Treat as YAML content string
-            data = yaml.safe_load(path_or_content)
+            data = yaml.safe_load(str(path_or_content))
 
         # Convert dict-style software_environments to list format
         if "software_environments" in data and isinstance(
             data["software_environments"], dict
         ):
-            envs = []
+            envs: List[Dict[str, Any]] = []
             for env_id, env_config in data["software_environments"].items():
                 env_dict = dict(env_config) if env_config else {}
                 env_dict["id"] = env_id
@@ -359,14 +329,6 @@ class Benchmark(DescribableEntity):
     def from_dict(cls, data: Dict[str, Any]) -> "Benchmark":
         """Create benchmark from dictionary."""
         return cls(**data)
-
-    @model_validator(mode="after")
-    def validate_no_duplicate_ids(self) -> "Benchmark":
-        """Validate that there are no duplicate IDs in stages."""
-        stage_ids = [stage.id for stage in self.stages]
-        if len(stage_ids) != len(set(stage_ids)):
-            raise ValueError("Duplicate stage IDs found")
-        return self
 
     def merge_with(self, other: "Benchmark") -> "Benchmark":
         """Merge this benchmark with another benchmark."""
@@ -406,6 +368,11 @@ class Benchmark(DescribableEntity):
 
         return Benchmark(**merged_data)
 
+    # Optional storage, with API compatibility
+    # (Methods moved to StorageAccessors mixin)
+
+    # API migration
+
     def upgrade_to_latest(self) -> "Benchmark":
         """Upgrade benchmark to latest API version."""
         # Check current version from either field
@@ -424,81 +391,27 @@ class Benchmark(DescribableEntity):
 
         return Benchmark(**data)
 
-    def validate_software_environments(self) -> List[str]:
-        """
-        Validate that all software environment references exist.
-
-        Returns:
-            List of validation error messages
-
-        Raises:
-            ValueError: If any validation errors are found
-        """
-        import warnings
-
-        errors: List[str] = []
-        env_ids = {env.id for env in self.software_environments}
-        used_env_ids = set()
-
-        # Check modules
-        for stage in self.stages:
-            for module in stage.modules:
-                if module.software_environment not in env_ids:
-                    errors.append(
-                        f"Module '{module.id}' references undefined software environment: '{module.software_environment}'"
-                    )
-                else:
-                    used_env_ids.add(module.software_environment)
-
-        # Check metric collectors
-        if self.metric_collectors:
-            for collector in self.metric_collectors:
-                if collector.software_environment not in env_ids:
-                    errors.append(
-                        f"Metric collector '{collector.id}' references undefined software environment: '{collector.software_environment}'"
-                    )
-                else:
-                    used_env_ids.add(collector.software_environment)
-
-        # Validate backend-specific configurations
-        for env in self.software_environments:
-            if self.software_backend == SoftwareBackendEnum.conda:
-                if not env.conda:
-                    errors.append(
-                        f"Conda backend requires conda configuration for environment '{env.id}'"
-                    )
-            elif self.software_backend == SoftwareBackendEnum.docker:
-                if not env.apptainer and not env.docker:
-                    errors.append(
-                        f"Docker backend requires apptainer configuration for environment '{env.id}'"
-                    )
-            elif self.software_backend == SoftwareBackendEnum.apptainer:
-                if not env.apptainer:
-                    errors.append(
-                        f"Apptainer backend requires apptainer configuration for environment '{env.id}'"
-                    )
-            elif self.software_backend == SoftwareBackendEnum.envmodules:
-                if not env.envmodule:
-                    errors.append(
-                        f"Envmodules backend requires envmodule configuration for environment '{env.id}'"
-                    )
-
-        # Check for unused environments
-        unused_envs = env_ids - used_env_ids
-        for unused_env in unused_envs:
-            warnings.warn(
-                f"Software environment '{unused_env}' is defined but not used",
-                UserWarning,
-            )
-
-        if errors:
-            raise ValueError(
-                f"Software environment validation failed: {'; '.join(errors)}. Environment not defined."
-            )
-
-        return errors
-
     # Compatibility methods for LinkMLConverter interface
+    # They can be removed when API migration is complete
+
+    def get_storage_api(self) -> Optional[str]:
+        """Get storage API with backward compatibility."""
+        if self.storage and self.storage.api:
+            return str(self.storage.api.value)
+        return str(self.storage_api.value) if self.storage_api else None
+
+    def get_storage_bucket_name(self) -> Optional[str]:
+        """Get storage bucket name with backward compatibility."""
+        if self.storage and self.storage.bucket_name:
+            return self.storage.bucket_name
+        return self.storage_bucket_name
+
+    def get_storage_endpoint(self) -> Optional[str]:
+        """Get storage endpoint."""
+        if self.storage and self.storage.endpoint:
+            return self.storage.endpoint
+        return None
+
     def get_name(self) -> str:
         """Get name of the benchmark."""
         return self.name if self.name else self.id
@@ -559,32 +472,21 @@ class Benchmark(DescribableEntity):
     def get_explicit_inputs(self, input_ids: List[str]) -> Dict[str, str]:
         """Get explicit inputs of a stage by input_id(s)."""
         all_stages_outputs: List[Dict[str, str]] = []
-        for stage_id, stage in self.get_stages().items():
-            outputs = self.get_stage_outputs(stage=stage_id)
-            outputs = {
-                key: value.format(
-                    input="{input}",
-                    stage=stage_id,
-                    module="{module}",
-                    params="{params}",
-                    dataset="{dataset}",
-                )
-                for key, value in outputs.items()
-            }
-            all_stages_outputs.append(outputs)
+        for stage in self.stages:
+            stage_outputs = self.get_stage_outputs(stage)
+            all_stages_outputs.append(stage_outputs)
 
-        all_stages_outputs_merged: Dict[str, str] = merge_dict_list(all_stages_outputs)  # type: ignore[assignment]
-
-        explicit: Dict[str, Optional[str]] = {key: None for key in input_ids}
-        for in_deliverable in input_ids:
-            curr_output = all_stages_outputs_merged.get(in_deliverable)
-            if curr_output is not None:
-                explicit[in_deliverable] = curr_output
+        # Merge all stage outputs
+        all_outputs = merge_dict_list(all_stages_outputs)
 
         result: Dict[str, str] = {}
-        for k, v in explicit.items():
-            if v is not None:
-                result[k] = v
+        for input_id in input_ids:
+            if input_id in all_outputs:
+                result[input_id] = all_outputs[input_id]
+            else:
+                # Default to a placeholder
+                result[input_id] = "{input_id}"
+
         return result
 
     def get_stage_outputs(self, stage: Union[str, Stage]) -> Dict[str, str]:
@@ -593,68 +495,60 @@ class Benchmark(DescribableEntity):
             stage_obj = self.get_stage(stage)
             if not stage_obj:
                 return {}
-            return {
-                output.id: expand_output_path(output) for output in stage_obj.outputs
-            }
+            stage = stage_obj
+
         return {output.id: expand_output_path(output) for output in stage.outputs}
 
     def get_output_stage(self, output_id: str) -> Optional[Stage]:
         """Get stage that returns output with output_id."""
         return self.get_stage_by_output(output_id)
 
+    def _resolve_module_attr(self, module: Union[str, Module], attr: str):
+        """Resolve a module attribute by module/module_id."""
+        module_obj = (
+            module if isinstance(module, Module) else self.get_modules().get(module)
+        )
+        return getattr(module_obj, attr, None) if module_obj else None
+
     def get_module_excludes(self, module: Union[str, Module]) -> Optional[List[str]]:
         """Get module excludes by module/module_id."""
-        if isinstance(module, str):
-            modules = self.get_modules()
-            module_obj = modules.get(module)
-            if not module_obj:
-                return None
-            return module_obj.exclude
-        return module.exclude
+        match module:
+            case str():
+                module_obj = self.get_modules().get(module)
+                if not module_obj or not module_obj.exclude:
+                    return None
+                return module_obj.exclude
+            case Module():
+                if not module.exclude:
+                    return None
+                return module.exclude
 
     def get_module_parameters(self, module: Union[str, Module]) -> Optional[List[Any]]:
         """Get module parameters by module/module_id."""
-        # Import here to avoid circular imports
-        from omnibenchmark.benchmark import params
+        from omnibenchmark.benchmark import params  # Avoid circular imports
 
-        if isinstance(module, str):
-            modules = self.get_modules()
-            module_obj = modules.get(module)
-            if not module_obj or not module_obj.parameters:
-                return None
-            return [
-                params.Params.from_cli_args(p.values) for p in module_obj.parameters
-            ]  # type: ignore[misc]
-        if not module or not module.parameters:
+        module_obj = (
+            module if isinstance(module, Module) else self.get_modules().get(module)
+        )
+        if not module_obj or not module_obj.parameters:
             return None
-        return [params.Params.from_cli_args(p.values) for p in module.parameters]  # type: ignore[misc]
+
+        return [params.Params.from_cli_args(p.values) for p in module_obj.parameters]  # type: ignore[misc]
 
     def get_module_repository(self, module: Union[str, Module]) -> Optional[Repository]:
         """Get module repository by module/module_id."""
-        if isinstance(module, str):
-            modules = self.get_modules()
-            module_obj = modules.get(module)
-            if not module_obj:
-                return None
-            return module_obj.repository
-        return module.repository
+        return self._resolve_module_attr(module, "repository")
 
     def get_module_environment(self, module: Union[str, Module]) -> Optional[str]:
         """Get module software environment by module/module_id."""
-        if isinstance(module, str):
-            modules = self.get_modules()
-            module_obj = modules.get(module)
-            if not module_obj:
-                return None
-            return module_obj.software_environment
-        return module.software_environment
+        return self._resolve_module_attr(module, "software_environment")
 
     def get_metric_collectors(self) -> List[MetricCollector]:
         """Get metric collectors."""
         return self.metric_collectors or []
 
     def is_initial(self, stage: Stage) -> bool:
-        """Check if stage is initial (has no inputs)."""
+        """Check if a stage is initial (has no inputs)."""
         return stage.inputs is None or len(stage.inputs) == 0
 
     def get_outputs(self) -> Dict[str, IOFile]:
@@ -681,99 +575,21 @@ class Benchmark(DescribableEntity):
         """Get conda environment files from software environments."""
         return [env.conda for env in self.software_environments]
 
-    def validate_structure(self, benchmark_dir: Optional[Path] = None) -> None:
-        """
-        Validate the benchmark structure after loading.
+    # Validations
 
-        This performs comprehensive validation including:
-        - Unique IDs for stages, modules, and outputs
-        - Valid file paths
-        - Stage inputs reference existing outputs
-        - Software environments are properly defined
-        - Environment paths exist (when benchmark_dir is provided)
+    @model_validator(mode="after")
+    def validate_model_structure_post_init(self) -> "Benchmark":
+        """Validate pure model structure after initialization (no execution context)."""
+        # Call the pure model validation from the validator base class
+        self.validate_model_structure()
+        return self
 
-        Args:
-            benchmark_dir: Directory containing the benchmark (for path validation)
-
-        Raises:
-            ValidationError: If validation fails
-        """
+    def validate_execution_context(self, benchmark_dir: Path) -> None:
+        """Validate execution context including file paths and environment availability."""
         errors: List[str] = []
 
-        # Store benchmark directory for environment path validation
-        if benchmark_dir:
-            self._benchmark_dir = benchmark_dir
-
-        # 1. Validate unique IDs
-        stage_ids = [stage.id for stage in self.stages]
-        duplicate_stage_ids = _find_duplicates(stage_ids)
-        if duplicate_stage_ids:
-            errors.append(
-                f"Found duplicate stage ids: {', '.join(duplicate_stage_ids)}"
-            )
-
-        all_modules = self.get_modules()
-        module_ids = list(all_modules.keys())
-        duplicate_module_ids = _find_duplicates(module_ids)
-        if duplicate_module_ids:
-            errors.append(
-                f"Found duplicate module ids: {', '.join(duplicate_module_ids)}"
-            )
-
-        all_outputs = self.get_outputs()
-        output_ids = list(all_outputs.keys())
-        duplicate_output_ids = _find_duplicates(output_ids)
-        if duplicate_output_ids:
-            errors.append(
-                f"Found duplicate output ids: {', '.join(duplicate_output_ids)}"
-            )
-
-        # 2. Validate output file paths
-        for output in all_outputs.values():
-            if output.path.strip() == "":
-                errors.append(f"Output path for file {output.id} is empty")
-            if os.path.isabs(output.path):
-                errors.append(
-                    f"Output path for file {output.id} must be relative, not absolute: {output.path}"
-                )
-
-        # 3. Validate stage inputs reference valid outputs
-        for stage in self.stages:
-            if stage.inputs:
-                for input_collection in stage.inputs:
-                    for input_id in input_collection.entries:
-                        if input_id not in output_ids:
-                            errors.append(
-                                f"Input with id '{input_id}' in stage '{stage.id}' is not valid"
-                            )
-
-        # 4. Validate software environment references
-        env_ids = {env.id for env in self.software_environments}
-
-        # Check modules
-        for module in all_modules.values():
-            if module.software_environment not in env_ids:
-                errors.append(
-                    f"Software environment with id '{module.software_environment}' is not defined."
-                )
-
-        # Check metric collectors
-        if self.metric_collectors:
-            for collector in self.metric_collectors:
-                if collector.software_environment not in env_ids:
-                    errors.append(
-                        f"Software environment with id '{collector.software_environment}' for metric collector '{collector.id}' is not defined."
-                    )
-
-                # Validate metric collector inputs
-                for collector_input in collector.inputs:
-                    if collector_input.id not in output_ids:
-                        errors.append(
-                            f"Input with id '{collector_input.id}' for metric collector '{collector.id}' is not valid."
-                        )
-
-        # 5. Validate software environment paths (if benchmark_dir provided)
-        if benchmark_dir and self.software_backend != SoftwareBackendEnum.host:
+        # Validate software environment paths (if benchmark_dir provided)
+        if self.software_backend != SoftwareBackendEnum.host:
             for env in self.software_environments:
                 env_errors = self._validate_environment_path(env, benchmark_dir)
                 errors.extend(env_errors)

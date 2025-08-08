@@ -21,8 +21,8 @@ from omnibenchmark.model.benchmark import (
     MetricCollector,
     Stage,
     Benchmark,
-    # Exceptions
-    ValidationError,
+    # Exceptions (moved to validation module)
+    # ValidationError,
     # Utility functions
     expand_output_path,
     validate_non_empty_string,
@@ -32,6 +32,10 @@ from omnibenchmark.model.benchmark import (
 from omnibenchmark.model.converter import (
     BenchmarkConverter,
     LinkMLConverter,  # Alias for backwards compatibility
+)
+from omnibenchmark.model.validation import (
+    ValidationError,
+    BenchmarkValidator,
 )
 from omnibenchmark.model.module import (
     DerivedSoftware,
@@ -61,6 +65,8 @@ __all__ = [
     "Benchmark",
     # Exceptions
     "ValidationError",
+    # Validators
+    "BenchmarkValidator",
     # Converters
     "BenchmarkConverter",
     "LinkMLConverter",

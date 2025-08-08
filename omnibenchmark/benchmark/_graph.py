@@ -1,23 +1,18 @@
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-
-from omnibenchmark.benchmark.benchmark_node import BenchmarkNode
-from omnibenchmark.model import ValidationError
 from omnibenchmark.dag import (
     DiGraph,
     topological_sort,
     all_simple_paths,
-    get_node_attributes,
     NetworkXUnfeasible,
 )
-from omnibenchmark.model import BenchmarkConverter
-from omnibenchmark.model import Stage
+from omnibenchmark.model import BenchmarkConverter, Stage, ValidationError
 
-import pydot  # TODO: should not be a global import, just on the command on demand
+from ._node import BenchmarkNode
 
 
-def expend_stage_nodes(
+def expand_stage_nodes(
     converter: BenchmarkConverter,
     stage: "Stage",
     out_dir: Path,
@@ -47,8 +42,10 @@ def expend_stage_nodes(
                     stages_by_output = list(
                         set(
                             [
-                                converter.get_stage_by_output(input_id).id
+                                stage.id
                                 for input_id in inputs
+                                for stage in [converter.get_stage_by_output(input_id)]
+                                if stage is not None
                             ]
                         )
                     )
@@ -83,7 +80,7 @@ def build_benchmark_dag(converter: BenchmarkConverter, out_dir: Path) -> DiGraph
 
     stage_nodes_map = {}
     for stage_id, stage in converter.get_stages().items():
-        nodes = expend_stage_nodes(converter, stage, out_dir, stage_ordering)
+        nodes = expand_stage_nodes(converter, stage, out_dir, stage_ordering)
         nodes_with_stage = [(node, {"stage": stage_id}) for node in nodes]
         g.add_nodes_from(nodes_with_stage)
         stage_nodes_map[stage_id] = nodes
@@ -103,10 +100,13 @@ def build_stage_dag(converter: BenchmarkConverter) -> DiGraph:
 
     for stage_id, stage in converter.get_stages().items():
         g.add_node(stage_id)
-        input_ids = [input_id for input in stage.inputs for input_id in input.entries]
+        input_ids = [
+            input_id for input in (stage.inputs or []) for input_id in input.entries
+        ]
         dep_stages = [converter.get_output_stage(input_id) for input_id in input_ids]
         for dep in dep_stages:
-            g.add_edge(dep.id, stage.id)
+            if dep is not None:
+                g.add_edge(dep.id, stage.id)
 
     return g
 
@@ -158,64 +158,88 @@ def compute_stage_order(stage_dag: DiGraph) -> List:
     return topological_order
 
 
-def export_to_dot(
-    G: DiGraph,
-    title: str = None,
-):
-    import matplotlib.pyplot as plt
+def find_node_by_id(graph, node_id: str) -> Optional[BenchmarkNode]:
+    """Find a node in the graph by its ID.
 
-    # Dynamically scale the node size based on node count
-    nodes_count = len(G.nodes)
-    div_nodes_count = max(1, nodes_count // 10)
-    graph_size = max(15, 15 * div_nodes_count)
+    Args:
+        graph: The benchmark DAG graph
+        node_id: The ID of the node to find
 
-    # Color nodes by stage (assuming 'stage' is a node attribute)
-    stages = get_node_attributes(G, "stage", default="none")
-    unique_stages = list(set(stages.values()))  # Get unique stages
-
-    # Define a colormap with different shades for the stages
-    stage_colors = plt.get_cmap("inferno", max(len(unique_stages), 5))
-
-    # Convert the graph to a PyDot graph object
-    pydot_graph = pydot.Dot(
-        graph_type="digraph", strict=True, label=title, labelloc="top", fontsize=20
-    )
-    pydot_graph.set_graph_defaults(
-        size=f"{graph_size},{graph_size}!", ratio="fill", margin=div_nodes_count
-    )
-
-    # Define the style for nodes
-    node_defaults = {
-        "shape": "rect",
-        "style": "filled,rounded",
-        "fontsize": "12",
-        "fontcolor": "white",
-        "width": "1.5",
-        "height": "0.6",
-        "penwidth": "1.0",
-    }
-    pydot_graph.set_node_defaults(**node_defaults)
-
-    # Define the style for edges
-    edge_defaults = {"color": "#CCCCCC", "penwidth": "0.5", "arrowsize": "0.7"}
-    pydot_graph.set_edge_defaults(**edge_defaults)
-
-    for node in G.nodes:
-        node_name = str(node)
-        rgba_color = stage_colors(unique_stages.index(stages[node]))
-        hex_color = _rgba_to_hex(rgba_color)
-        pydot_node = pydot.Node(node_name, label=node_name, fillcolor=hex_color)
-        pydot_graph.add_node(pydot_node)
-
-    for source, target in G.edges:
-        pydot_edge = pydot.Edge(str(source), str(target))
-        pydot_graph.add_edge(pydot_edge)
-
-    return pydot_graph
+    Returns:
+        The node with matching ID, or None if not found
+    """
+    for node in graph.nodes:
+        if node.get_id() == node_id:
+            return node
+    return None
 
 
-def _rgba_to_hex(rgba):
-    r = int(rgba[0] * 255)
-    g = int(rgba[1] * 255)
-    b = int(rgba[2] * 255)
-    return f"#{r:02X}{g:02X}{b:02X}"
+def get_nodes_by_module_id(graph, module_id: str) -> List[BenchmarkNode]:
+    """Get all nodes in the graph that belong to a specific module.
+
+    Args:
+        graph: The benchmark DAG graph
+        module_id: The module ID to filter by
+
+    Returns:
+        List of nodes belonging to the specified module
+    """
+    nodes = []
+    for node in graph.nodes:
+        if node.module_id == module_id:
+            nodes.append(node)
+    return nodes
+
+
+def get_nodes_by_stage_id(graph, stage_id: str) -> List[BenchmarkNode]:
+    """Get all nodes in the graph that belong to a specific stage.
+
+    Args:
+        graph: The benchmark DAG graph
+        stage_id: The stage ID to filter by
+
+    Returns:
+        List of nodes belonging to the specified stage
+    """
+    nodes = []
+    for node in graph.nodes:
+        if node.stage_id == stage_id:
+            nodes.append(node)
+    return nodes
+
+
+def find_node_with_module_id(graph, module_id: str) -> Optional[BenchmarkNode]:
+    """Find the first node with a specific module ID.
+
+    Args:
+        graph: The benchmark DAG graph
+        module_id: The module ID to search for
+
+    Returns:
+        The first node with matching module ID, or None if not found
+    """
+    for node in graph.nodes:
+        if node.module_id == module_id:
+            return node
+    return None
+
+
+def get_benchmark_datasets(model, stages) -> List[str]:
+    """Extract dataset IDs from initial stages.
+
+    Args:
+        model: The benchmark model
+        stages: Dictionary of stage_id -> stage mappings
+
+    Returns:
+        List of dataset IDs from initial stages
+    """
+    datasets = []
+    for _, stage in stages.items():
+        # There should be only one initial stage
+        # TODO(ben): worthy to move this assumption to model validation.
+        if model.is_initial(stage):
+            for module in stage.modules:
+                datasets.append(module.id)
+            break
+    return datasets

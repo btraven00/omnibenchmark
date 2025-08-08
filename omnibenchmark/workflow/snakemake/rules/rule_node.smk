@@ -1,7 +1,7 @@
 from importlib import resources
 from pathlib import Path
 
-from omni_schema.datamodel.omni_schema import SoftwareBackendEnum, Benchmark
+from omnibenchmark.model import SoftwareBackendEnum, Benchmark
 
 from omnibenchmark.benchmark import Validator, BenchmarkNode
 from omnibenchmark.workflow.snakemake import scripts
