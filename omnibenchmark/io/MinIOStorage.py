@@ -16,6 +16,8 @@ import boto3
 import minio
 import minio.commonconfig
 import minio.retention
+from minio.lifecycleconfig import LifecycleConfig, Rule, NoncurrentVersionExpiration
+from minio.commonconfig import Filter, Tags
 
 from omnibenchmark.benchmark import Benchmark
 from omnibenchmark.io.exception import (
@@ -48,13 +50,13 @@ def set_bucket_public_readonly(client: minio.Minio, bucket_name: str):
 def set_bucket_lifecycle_config(
     client: minio.Minio, bucket_name: str, noncurrent_days: int = 1
 ):
-    lifecycle_config = minio.lifecycleconfig.LifecycleConfig(
+    lifecycle_config = LifecycleConfig(
         [
-            minio.lifecycleconfig.Rule(
+            Rule(
                 minio.commonconfig.ENABLED,
-                rule_filter=minio.lifecycleconfig.Filter(prefix="*"),
+                rule_filter=Filter(prefix="*"),
                 rule_id="rule1",
-                noncurrent_version_expiration=minio.lifecycleconfig.NoncurrentVersionExpiration(
+                noncurrent_version_expiration=NoncurrentVersionExpiration(
                     noncurrent_days=noncurrent_days
                 ),
             ),
@@ -110,11 +112,17 @@ class MinIOStorage(RemoteStorage):
             )
             tmp_auth_options = self.auth_options.copy()
         try:
-            return minio.Minio(**tmp_auth_options)
+            return minio.Minio(
+                endpoint=tmp_auth_options["endpoint"],
+                **{k: v for k, v in tmp_auth_options.items() if k != "endpoint"},
+            )
         except Exception:
             url = urlparse(tmp_auth_options["endpoint"])
             tmp_auth_options["endpoint"] = url.netloc
-            return minio.Minio(**tmp_auth_options)
+            return minio.Minio(
+                endpoint=tmp_auth_options["endpoint"],
+                **{k: v for k, v in tmp_auth_options.items() if k != "endpoint"},
+            )
 
     def _test_connect(self) -> None:
         try:
@@ -150,7 +158,9 @@ class MinIOStorage(RemoteStorage):
             )
         )
         allversions = [
-            os.path.basename(v.object_name).replace(".csv", "") for v in versionobjects
+            os.path.basename(v.object_name).replace(".csv", "")
+            for v in versionobjects
+            if v.object_name is not None
         ]
         versions = list()
         for version in allversions:
@@ -215,13 +225,15 @@ class MinIOStorage(RemoteStorage):
         )
 
         # filter objects based on workflow
-        object_names_to_tag, versionid_of_objects_to_tag = filter_objects_to_tag(object_names_to_tag,
-                                                                                 versionid_of_objects_to_tag,
-                                                                                 self.storage_options,
-                                                                                 benchmark)
+        object_names_to_tag, versionid_of_objects_to_tag = filter_objects_to_tag(
+            object_names_to_tag,
+            versionid_of_objects_to_tag,
+            self.storage_options,
+            benchmark,
+        )
 
         # Tag all objects with current version
-        tags = minio.datatypes.Tags.new_object_tags()
+        tags = Tags.new_object_tags()
         tags[str(self.version)] = "1"
         for n, v in zip(object_names_to_tag, versionid_of_objects_to_tag):
             self.client.set_object_tags(self.benchmark, n, tags, version_id=v)
@@ -288,10 +300,11 @@ class MinIOStorage(RemoteStorage):
                 "version_id": response_headers.get("x-amz-version-id"),
                 # some parsing of date to get to consistent format
                 "last_modified": datetime.datetime.strptime(
-                    response_headers.get("last-modified"), "%a, %d %b %Y %H:%M:%S GMT"
+                    response_headers.get("last-modified") or "",
+                    "%a, %d %b %Y %H:%M:%S GMT",
                 ).strftime("%Y-%m-%d %H:%M:%S.%f+00:00"),
                 "size": response_headers.get("content-length"),
-                "etag": response_headers.get("etag").replace('"', ""),
+                "etag": (response_headers.get("etag") or "").replace('"', ""),
             }
         else:
             # get all objects

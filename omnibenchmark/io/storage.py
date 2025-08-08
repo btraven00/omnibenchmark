@@ -42,7 +42,7 @@ def get_storage(
         return MinIOStorage(auth_options, benchmark, storage_options)
 
 
-def get_storage_from_benchmark(benchmark: Benchmark) -> "MinIOStorage":
+def get_storage_from_benchmark(benchmark: Benchmark) -> Optional["MinIOStorage"]:
     """
     Selects a remote storage type from a benchmark object.
 
@@ -50,12 +50,15 @@ def get_storage_from_benchmark(benchmark: Benchmark) -> "MinIOStorage":
     - benchmark (Benchmark): The benchmark object.
 
     Returns:
-    - RemoteStorage: The remote storage object.
+    - Optional[MinIOStorage]: The remote storage object, or None if unavailable.
     """
     auth_options = remote_storage_args(benchmark)
     # setup storage
     storage_api = benchmark.get_storage_api()
     bucket_name = benchmark.get_storage_bucket_name()
+
+    if storage_api is None or bucket_name is None:
+        return None
 
     return get_storage(
         storage_api, auth_options, bucket_name, StorageOptions(out_dir="out")

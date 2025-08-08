@@ -7,7 +7,6 @@ import zipfile
 from pathlib import Path
 
 import click
-import yaml
 
 from omnibenchmark.benchmark import BenchmarkExecution
 from omnibenchmark.cli.utils.logging import logger
@@ -18,6 +17,7 @@ from omnibenchmark.io.files import download_files
 from omnibenchmark.io.S3config import benchmarker_access_token_policy
 from omnibenchmark.io.tree import tree_string_from_list
 from omnibenchmark.io.storage import get_storage, remote_storage_args
+from omnibenchmark.io.MinIOStorage import MinIOStorage
 
 from .debug import add_debug_option
 
@@ -31,24 +31,28 @@ class StorageAuth:
         self.auth_options = remote_storage_args(benchmark_path)
 
         # Validate required storage components
-        self.api = self.benchmark.get_storage_api()
-        self.bucket = self.benchmark.get_storage_bucket_name()
+        api = self.benchmark.get_storage_api()
+        bucket = self.benchmark.get_storage_bucket_name()
 
-        if self.api is None:
+        if api is None:
             logger.error("Error: No storage API found.")
             sys.exit(1)
-        if self.bucket is None:
+        if bucket is None:
             logger.error("Error: No storage bucket found.")
             sys.exit(1)
 
-    def get_storage_instance(self):
+        # Store validated non-null values
+        self.api: str = api
+        self.bucket: str = bucket
+
+    def get_storage_instance(self) -> MinIOStorage:
         """Get validated storage instance."""
-        if self.api is None or self.bucket is None:
-            return None
         ss = get_storage(self.api, self.auth_options, self.bucket)
         if ss is None:
             logger.error("Error: No storage found.")
             sys.exit(1)
+        # Type assertion since we know ss is not None after the exit check
+        assert ss is not None
         return ss
 
 
@@ -72,9 +76,6 @@ def storage(ctx):
 def create_benchmark_version(benchmark_path: str):
     """Create a new benchmark version."""
     assert benchmark_path is not None
-
-    with open(benchmark_path, "r") as fh:
-        yaml.safe_load(fh)
 
     storage_auth = StorageAuth(benchmark_path)
     ss = storage_auth.get_storage_instance()

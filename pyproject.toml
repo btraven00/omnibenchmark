@@ -109,7 +109,11 @@ typeCheckingMode = "standard"
 
 # Strict type checking for new modules
 include = ["omnibenchmark"]
-strict = ["omnibenchmark/dag/**", "omnibenchmark/model/**"]
+strict = [
+    "omnibenchmark/dag/**",
+    "omnibenchmark/model/**",
+    "omnibenchmark/io/**",
+]
 
 # Type checking rules
 reportMissingImports = true
@@ -118,14 +122,14 @@ reportGeneralTypeIssues = "error"
 reportPropertyTypeMismatch = "error"
 reportFunctionMemberAccess = "error"
 reportMissingParameterType = "error"
-reportUnknownParameterType = "warning"
-reportUnknownVariableType = "warning"
-reportUnknownMemberType = "warning"
-reportUnknownArgumentType = "warning"
-reportUnknownLambdaType = "warning"
+reportUnknownParameterType = "error"
+reportUnknownVariableType = "error"
+reportUnknownMemberType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownLambdaType = "error"
 reportIncompatibleMethodOverride = "error"
-reportUntypedFunctionDecorator = "warning"
-reportUntypedClassDecorator = "warning"
+reportUntypedFunctionDecorator = "error"
+reportUntypedClassDecorator = "error"
 reportUnboundVariable = "error"
 reportInvalidStringEscapeSequence = "error"
 reportMissingTypeArgument = "error"
@@ -141,16 +145,26 @@ reportUnsupportedDunderAll = "warning"
 reportUnusedExpression = "warning"
 reportUnnecessaryTypeIgnoreComment = "warning"
 reportMatchNotExhaustive = "error"
+reportArgumentType = "error"
+reportAssignmentType = "error"
+reportReturnType = "error"
+reportOptionalSubscript = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalCall = "error"
+reportOptionalIterable = "error"
+reportOptionalContextManager = "error"
+reportOptionalOperand = "error"
 
 # Strict mode settings for new modules
 [tool.pyright.strictListInference]
-paths = ["omnibenchmark/dag", "omnibenchmark/model"]
+paths = ["omnibenchmark/dag", "omnibenchmark/model", "omnibenchmark/io"]
 
 [tool.pyright.strictDictionaryInference]
-paths = ["omnibenchmark/dag", "omnibenchmark/model"]
+paths = ["omnibenchmark/dag", "omnibenchmark/model", "omnibenchmark/io"]
 
 [tool.pyright.strictSetInference]
-paths = ["omnibenchmark/dag", "omnibenchmark/model"]
+paths = ["omnibenchmark/dag", "omnibenchmark/model", "omnibenchmark/io"]
+
 
 [tool.ruff]
 line-length = 88 # Match Black's default line length

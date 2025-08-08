@@ -10,6 +10,7 @@ include = [
     "omnibenchmark/cli",
     "omnibenchmark/dag",
     "omnibenchmark/model",
+    "omnibenchmark/io",
     "tests/dag",
 ]
 exclude = [

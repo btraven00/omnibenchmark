@@ -21,6 +21,7 @@ class ExecutionContext:
 
     def __init__(self, benchmark_yaml: Path, out_dir: Path = Path("out")):
         # base path is always the location of the benchmark YAML file
+        # TODO: rename to definition_file
         self.path = benchmark_yaml
 
         # directory is used to lookup files and directories expressed in relative paths,
