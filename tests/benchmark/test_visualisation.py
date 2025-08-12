@@ -2,55 +2,52 @@ import re
 import random
 
 import pytest
-
-from omnibenchmark.dag import DiGraph
 from pathlib import Path
 
 from omnibenchmark.benchmark import Benchmark
-from omnibenchmark.benchmark._dot import export_to_dot as dag_export_to_dot
+from omnibenchmark.benchmark._dot import export_to_dot
+from omnibenchmark.dag import DiGraph
 
 
 @pytest.mark.short
-def test_export_computational_to_dot():
+def test_export_computational_to_dot(tmp_path):
     benchmark_file = "../data/Benchmark_001.yaml"
     benchmark_file_path = Path(__file__).parent / benchmark_file
-    output_file = "computational_graph.dot"
-    output_file_path = Path(output_file)
+    output_file_path = tmp_path / "computational_graph.dot"
 
     try:
         benchmark = Benchmark(benchmark_file_path)
         dot = benchmark.export_to_dot()
-        dot.write(output_file)
-        assert output_file_path.exists(), f"Output file {output_file} was not created."
+        dot.write(str(output_file_path))
+        assert (
+            output_file_path.exists()
+        ), f"Output file {output_file_path} was not created."
     except Exception as e:
         pytest.fail(f"Plotting benchmark computational graph failed: {e}")
-    finally:
-        if output_file_path.exists():
-            output_file_path.unlink()
 
 
 @pytest.mark.timeout(60)
-def test_export_computational_to_dot_scaling():
+def test_export_computational_to_dot_scaling(tmp_path):
     Glarge = generate_graph(100)
-    dot = dag_export_to_dot(
+    dot = export_to_dot(
         Glarge,
         title="Large Graph (100 nodes)",
     )
-    dot.write("large_graph.dot")
+    dot.write(str(tmp_path / "large_graph.dot"))
 
     Gmedium = generate_graph(50)
-    dot = dag_export_to_dot(
+    dot = export_to_dot(
         Gmedium,
         title="Medium Graph (50 nodes)",
     )
-    dot.write("medium_graph.dot")
+    dot.write(str(tmp_path / "medium_graph.dot"))
 
     Gsmall = generate_graph(10)
-    dot = dag_export_to_dot(
+    dot = export_to_dot(
         Gsmall,
         title="Small Graph (10 nodes)",
     )
-    dot.write("small_graph.dot")
+    dot.write(str(tmp_path / "small_graph.dot"))
 
 
 @pytest.mark.short
