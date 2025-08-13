@@ -11,7 +11,7 @@ import humanfriendly
 from omnibenchmark.benchmark import BenchmarkExecution
 from omnibenchmark.benchmark.constants import DEFAULT_TIMEOUT_HUMAN
 from omnibenchmark.cli.utils.logging import logger
-from omnibenchmark.cli.utils.validation import validate_benchmark
+
 from omnibenchmark.cli.utils.args import parse_extra_args
 from omnibenchmark.io.storage import get_storage_from_benchmark
 from omnibenchmark.io.storage import remote_storage_snakemake_args
@@ -395,7 +395,11 @@ def run_module(
 def validate_yaml(ctx, benchmark):
     """Validate a benchmark yaml."""
     logger.info("Validating a benchmark yaml.")
-    _ = validate_benchmark(benchmark, "/tmp")
+    try:
+        _ = BenchmarkExecution(Path(benchmark), Path("/tmp"))
+        logger.info("Benchmark YAML file integrity check passed.")
+    except Exception as e:
+        log_error_and_quit(logger, f"Failed to load benchmark: {e}")
 
 
 def log_error_and_quit(logger, error):
