@@ -9,8 +9,6 @@ authors = [
     { name = "Ben Carrillo" },
 ]
 readme = "README.md"
-homepage = "https://github.com/omnibenchmark/omnibenchmark"
-repository = "https://github.com/omnibenchmark/omnibenchmark"
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
@@ -26,17 +24,16 @@ dependencies = [
     "click>=8.1.7",
     "python-dateutil>=2.9.0.post0",
     "filelock>=3.4.0",
-    "pydantic",
     "spdx-license-list>=3.19",
     "PyYAML",
     "humanfriendly",
+    "pydantic",
 
     # Cloning modules
     "GitPython>=3.1.0",
 
     # Workflow
-    "snakemake>=8.0",      # modify constraints.txt if you need stricter pinning
-    "snakedeploy>=0.10.0",
+    "snakemake>=8.0", # modify constraints.txt if you need stricter pinning
 
     # Build tools
     "easybuild>=5.0.0",
@@ -52,6 +49,10 @@ dependencies = [
 
 ]
 
+[project.urls]
+Homepage = "https://omnibenchmark.org"
+Repository = "https://github.com/omnibenchmark/omnibenchmark"
+
 [project.optional-dependencies]
 s3 = ["minio>=7.2.7", "boto3>=1.34.102", "snakemake-storage-plugin-s3>=0.2.12"]
 test = [
@@ -59,45 +60,26 @@ test = [
     "pytest-split>=0.9.0",
     "pytest-xdist>=3.6.1",
     "testcontainers>=4.5.1",
-    "pytest-timeout",
+    "pytest-timeout==2.3.1",
+    "s3fs[boto3]>=2023.12.0",
 ]
-dev = [
-    "ipython",
-    "poetry",
-    "pre-commit",
-    "ruff",
-    "typing-extensions",
-    "isort",
-    "pyright",
-]
+dev = ["ipython", "pre-commit", "ruff", "typing-extensions", "isort", "pyright"]
 
 [project.scripts]
 ob = 'omnibenchmark.cli.main:cli'
 
 [build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.8.2,<2.0.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+requires = ["setuptools>=61", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
 
-[tool.poetry]
-packages = [{ include = "omnibenchmark" }]
-version = "0.0.0"                          # changed dynamically by plugin
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["omnibenchmark"]
 
-[tool.poetry.requires-plugins]
-poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
-
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-dirty = false
-
-[tool.poetry.group.test.dependencies]
-genbadge = { extras = ["coverage", "tests"], version = "^1.1.1" }
-argparse = "^1.4.0"
-
-s3fs = { extras = ["boto3"], version = ">=2023.12.0" }
-boto3 = "*"
-botocore = "*"
-pytest-timeout = "^2.3.1"
+[tool.setuptools_scm]
+# Optional settings (or leave empty for default)
+version_scheme = "post-release"
+local_scheme = "dirty-tag"
 
 [tool.isort]
 profile = "black"

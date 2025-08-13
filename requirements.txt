@@ -14,10 +14,6 @@ attrs==25.3.0
     #   referencing
 certifi==2025.1.31
     # via requests
-cffi==1.17.1
-    # via
-    #   cryptography
-    #   pynacl
 charset-normalizer==3.4.1
     # via requests
 click==8.1.8
@@ -79,7 +75,6 @@ immutables==0.21
 jinja2==3.1.6
     # via
     #   snakedeploy
-    #   snakemake
 jsonschema==4.23.0
     # via
     #   nbformat
@@ -121,20 +116,12 @@ psutil==7.0.0
     # via snakemake
 pulp==2.9.0
     # via snakemake
-pycparser==2.22
-    # via cffi
 pydantic==2.11.3
     # via omnibenchmark (pyproject.toml)
 pydantic-core==2.33.1
     # via pydantic
 pydot==3.0.4
     # via omnibenchmark (pyproject.toml)
-pygithub==2.6.1
-    # via snakedeploy
-pyjwt==2.10.1
-    # via pygithub
-pynacl==1.5.0
-    # via pygithub
 pyparsing==3.2.3
     # via
     #   matplotlib
@@ -164,7 +151,6 @@ requests==2.32.3
     #   snakemake
 reretry==0.11.8
     # via
-    #   snakedeploy
     #   snakemake
     #   snakemake-interface-storage-plugins
 rpds-py==0.24.0
@@ -177,8 +163,6 @@ smart-open==7.1.0
     # via snakemake
 smmap==5.0.2
     # via gitdb
-snakedeploy==0.11.0
-    # via omnibenchmark (pyproject.toml)
 snakemake==8.25.1
     # via
     #   -c constraints.txt
@@ -224,7 +208,6 @@ typing-extensions==4.13.2
     # via
     #   pydantic
     #   pydantic-core
-    #   pygithub
     #   referencing
     #   typing-inspection
 typing-inspection==0.4.0
@@ -232,9 +215,7 @@ typing-inspection==0.4.0
 tzdata==2025.2
     # via pandas
 urllib3==2.4.0
-    # via
-    #   pygithub
-    #   requests
+    # via requests
 wrapt==1.17.2
     # via
     #   deprecated
