@@ -21,9 +21,18 @@ ruff = "*"
 
 # Core dependencies for the package
 git = "*"
+pip = "*"
 
 [target.linux-64.dependencies]
-# Linux-specific dependencies if needed
+# Linux-specific software testing dependencies
+stress = "*"
+openmpi = "*"
+apptainer = "*"
+lua = "*"
+lua-luafilesystem = "*"
+lua-luaposix = "*"
+tcl = "*"
+tk = "*"
 
 [target.osx-64.dependencies]
 # macOS x86_64 specific dependencies
@@ -57,6 +66,7 @@ testcontainers = ">=4.5.1"
 
 # Development and testing
 tox = "*"
+build = "*"
 
 [tasks]
 # Basic test tasks - only short tests
@@ -68,12 +78,33 @@ lint = "ruff check ."
 lint-fix = "ruff check . --fix"
 typecheck = "pyright"
 
+# Software testing tasks
+test-software = { cmd = "pytest -v -x --show-capture=stderr tests/software/", description = "Run software integration tests" }
+
 # Development tasks
 dev-install = "pip install -e ."
+build = "python -m build ."
 clean = "rm -rf dist/ build/ *.egg-info/ .pytest_cache/ .coverage"
+pip = "pip"
 
 # Tox for Python version testing
 test-tox = "tox"
 
+[feature.docs.dependencies]
+# Documentation dependencies (optional feature)
+mkdocs = ">=1.6.0"
+mkdocs-material = "9.5.28"
+mkdocs-git-revision-date-localized-plugin = "1.2.6"
+mkdocs-bibtex = ">=2.16.0"
+mkdocs-click = "*"
+mike = "*"
+
+[feature.docs.tasks]
+# Documentation tasks (available when docs feature is enabled)
+docs-build = { cmd = "mkdocs build", cwd = "docs", description = "Build documentation" }
+docs-serve = { cmd = "mkdocs serve", cwd = "docs", description = "Serve documentation locally" }
+docs-deploy = { cmd = "mike deploy --push --update-aliases", cwd = "docs", description = "Deploy documentation with versioning" }
+
 [environments]
 default = { solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
