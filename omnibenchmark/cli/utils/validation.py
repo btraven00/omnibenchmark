@@ -5,7 +5,7 @@ import yaml
 
 from pathlib import Path
 
-from omnibenchmark.benchmark import Benchmark
+from omnibenchmark.model import Benchmark
 from omnibenchmark.cli.utils.logging import logger
 
 
@@ -17,7 +17,7 @@ def validate_benchmark(
         try:
             with open(benchmark_file, "r") as file:
                 yaml.safe_load(file)
-                benchmark = Benchmark(Path(benchmark_file), Path(out_dir))
+                benchmark = Benchmark.from_yaml(Path(benchmark_file))
 
                 if echo:
                     logger.info("Benchmark YAML file integrity check passed.")

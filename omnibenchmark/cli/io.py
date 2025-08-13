@@ -28,7 +28,7 @@ class StorageAuth:
     def __init__(self, benchmark_path: str):
         self.benchmark_path = benchmark_path
         self.benchmark = BenchmarkExecution(Path(benchmark_path))
-        self.auth_options = remote_storage_args(benchmark_path)
+        self.auth_options = remote_storage_args(self.benchmark)
 
         # Validate required storage components
         api = self.benchmark.get_storage_api()
@@ -73,11 +73,11 @@ def storage(ctx):
     required=True,
     envvar="OB_BENCHMARK",
 )
-def create_benchmark_version(benchmark_path: str):
+def create_benchmark_version(benchmark: str):
     """Create a new benchmark version."""
-    assert benchmark_path is not None
+    assert benchmark is not None
 
-    storage_auth = StorageAuth(benchmark_path)
+    storage_auth = StorageAuth(benchmark)
     ss = storage_auth.get_storage_instance()
 
     ss.set_version(storage_auth.benchmark.get_benchmark_version())
@@ -314,7 +314,7 @@ def create_policy(benchmark_path: str):
 @click.pass_context
 def archive_benchmark(
     ctx,
-    benchmark_path,
+    benchmark,
     code,
     software,
     results,
@@ -333,9 +333,9 @@ def archive_benchmark(
 
     """Archive a benchmark"""
 
-    assert benchmark_path is not None
+    assert benchmark is not None
 
-    storage_auth = StorageAuth(benchmark_path)
+    storage_auth = StorageAuth(benchmark)
     benchmark = storage_auth.benchmark
 
     match compression:
