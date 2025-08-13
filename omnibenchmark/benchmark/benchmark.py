@@ -13,6 +13,7 @@ from omnibenchmark.benchmark import _graph as graph
 from omnibenchmark.model import Benchmark as BenchmarkModel
 from omnibenchmark.utils import format_mc_output
 
+from ._dag_builder import DAGBuilder
 from ._dot import export_to_dot
 
 
@@ -50,8 +51,10 @@ class BenchmarkExecution:
         # Pure model validation happens automatically via Pydantic
         self.model.validate_execution_context(self.context.directory)
 
-        # Build DAG directly from model
-        self.G = graph.build_benchmark_dag(self.model, self.context.out_dir)
+        # Use DAGBuilder to construct the computational graph
+        # TODO: why does the DAG needs out_dir?
+        dag_builder = DAGBuilder(self.model, self.context.out_dir)
+        self.G = dag_builder.build()
 
         self.execution_paths = None
 
@@ -161,6 +164,10 @@ class BenchmarkExecution:
 
     def get_metric_collectors(self):
         return self.model.get_metric_collectors()
+
+    def get_stage_ids(self):
+        """Get all stage IDs."""
+        return [stage.id for stage in self.model.stages]
 
     def _generate_execution_paths(self):
         path_exclusions = collect_path_exclusions(self.model)

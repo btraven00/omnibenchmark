@@ -24,7 +24,6 @@ class WorkflowEngine(metaclass=ABCMeta):
         module_path: str = os.environ.get("MODULEPATH", ""),
         debug: bool = False,
         work_dir: Path = Path(os.getcwd()),
-        out_dir: str = "out",
         local_timeout: Optional[int] = None,
         **kwargs,
     ) -> bool:
@@ -41,7 +40,6 @@ class WorkflowEngine(metaclass=ABCMeta):
             backend (SoftwareBackendEnum): which software backend to use when running the workflow. Available: `host`, `docker`, `apptainer`, `conda`, `envmodules`. Default: `host`
             module_path (str): The path where the `envmodules` are located. This path will be searched during the workflow run using `envmodules` backend.
             work_dir (str): working directory. Default: current work directory
-            out_dir (str): output directory. Default: `out`
             local_timeout (int, optional): timeout, in seconds, when executing locally. It will be passed to the subprocess invocation.
             **kwargs: keyword arguments to pass to the workflow engine
 
