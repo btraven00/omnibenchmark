@@ -661,7 +661,15 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
         return self
 
     def validate_execution_context(self, benchmark_dir: Path) -> None:
-        """Validate execution context including file paths and environment availability."""
+        """Validate execution context including file paths and environment availability.
+
+        ARCHITECTURAL WARNING: This method performs system-specific validation
+        that violates the principle of keeping models abstract and declarative.
+
+        TODO: Move this entire method to BenchmarkExecution class or a separate
+        validation layer. The model should only validate data structure and
+        logical consistency, not system state or file existence.
+        """
         errors: List[str] = []
 
         # Validate software environment paths (if benchmark_dir provided)
@@ -677,12 +685,23 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
     def _validate_environment_path(
         self, env: SoftwareEnvironment, benchmark_dir: Path
     ) -> List[str]:
-        """Validate software environment path based on backend."""
+        """Validate software environment path based on backend.
+
+        ARCHITECTURAL WARNING: This method performs system-specific validation
+        that violates the principle of keeping models abstract and declarative.
+
+        TODO: Move system-specific checks (file existence, envmodule availability)
+        to BenchmarkExecution or a separate validation layer. The model should
+        only validate data structure and logical consistency, not system state.
+        """
         errors: List[str] = []
 
         # Get the appropriate environment configuration
         if self.software_backend == SoftwareBackendEnum.envmodules:
             if env.envmodule:
+                # TODO: ARCHITECTURAL ISSUE - System-specific environment validation does not belong in abstract model
+                # This should be moved to BenchmarkExecution or a separate validation layer
+                # The model should only validate structure, not check system availability
                 # Import here to avoid circular dependency
                 from omnibenchmark.utils import try_avail_envmodule
 
@@ -715,6 +734,9 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
                     f"Software environment with id '{env.id}' does not have a valid backend definition for: '{self.software_backend.value}'."
                 )
             elif not _is_url(env_path) and not Path(env_path).is_absolute():
+                # TODO: ARCHITECTURAL ISSUE - File system checks do not belong in abstract model
+                # This should be moved to BenchmarkExecution or a separate validation layer
+                # The model should only validate structure, not check file existence
                 # Relative path - check relative to benchmark_dir
                 full_path = benchmark_dir / env_path
                 if not full_path.exists():
@@ -722,6 +744,9 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
                         f"Software environment path for '{self.software_backend.value}' does not exist: '{full_path}'."
                     )
             elif not _is_url(env_path) and Path(env_path).is_absolute():
+                # TODO: ARCHITECTURAL ISSUE - File system checks do not belong in abstract model
+                # This should be moved to BenchmarkExecution or a separate validation layer
+                # The model should only validate structure, not check file existence
                 # Absolute path - check directly
                 if not Path(env_path).exists():
                     errors.append(

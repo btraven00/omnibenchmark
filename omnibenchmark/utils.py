@@ -4,13 +4,23 @@ import os
 import subprocess
 from pathlib import Path
 from typing import List, Union, Any
-import yaml
-import warnings
+
 
 # Import moved to function to avoid circular import
 
 
 def try_avail_envmodule(module_name: str) -> bool:
+    """Check if an environment module is available on the system.
+
+    NOTE: This function should only be used in execution contexts (e.g., BenchmarkExecution),
+    not in abstract model validation. Models should remain system-agnostic.
+
+    Args:
+        module_name: Name of the environment module to check
+
+    Returns:
+        bool: True if module is available, False otherwise
+    """
     env = {}
     env.update(os.environ)
 
@@ -32,32 +42,6 @@ def try_avail_envmodule(module_name: str) -> bool:
 
 def as_list(input: Union[List, Any]):
     return input if isinstance(input, List) else [input]
-
-
-def parse_instance(path: Path, target_class) -> Any:
-    """
-    DEPRECATED: Use Benchmark.from_yaml() instead.
-
-    Load a model of target_class from a file.
-    """
-    warnings.warn(
-        "parse_instance is deprecated. Use Benchmark.from_yaml() or the appropriate model's from_yaml() method instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-    # Import here to avoid circular imports and to make deprecation clearer
-    from omnibenchmark.model import Benchmark
-
-    # For backwards compatibility, if target_class is the old omni_schema.Benchmark,
-    # use the new Benchmark.from_yaml() method
-    if hasattr(target_class, "__module__") and "omni_schema" in target_class.__module__:
-        return Benchmark.from_yaml(path)
-
-    # Otherwise, try to load with yaml and instantiate
-    with path.open("r") as file:
-        data = yaml.load(file, yaml.SafeLoader)
-        return target_class(**data) if callable(target_class) else data
 
 
 def merge_dict_list(list_of_dicts):
