@@ -156,11 +156,9 @@ def _match_input_module(input: str, stages: List[Tuple[str, ...]], dataset: str)
     input = input.replace("{module}", matched_module)
     input = input.replace("{dataset}", dataset)
     if "{params}" in input:
-        matched_params = next(
-            (x for x in matching_stage[2:] if "param" in x or "default" in x), None
-        )
-        if matched_params is not None:
-            input = input.replace("{params}", matched_params)
+        # Use first parameter value if available, otherwise default to "default"
+        matched_params = matching_stage[2] if len(matching_stage) > 2 else "default"
+        input = input.replace("{params}", matched_params)
 
     return input
 

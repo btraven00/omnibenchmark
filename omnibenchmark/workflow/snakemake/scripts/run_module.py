@@ -12,6 +12,7 @@ from pathlib import Path
 from snakemake.script import Snakemake
 
 from omnibenchmark.benchmark import constants
+from omnibenchmark.benchmark.params import Params
 from omnibenchmark.io.code import clone_module
 from omnibenchmark.workflow.snakemake.scripts.execution import execution
 from omnibenchmark.benchmark.symlinks import SymlinkManager
@@ -60,8 +61,12 @@ module_dir = clone_module(repositories_dir, repository_url, commit_hash)
 module_name = get_module_name_from_rule_name(snakemake.rule)
 
 try:
-    if inputs_map is None or parameters is None:
-        raise RuntimeError("inputs_map and parameters must be provided")
+    # Handle None parameters and inputs_map by providing defaults
+    if inputs_map is None:
+        inputs_map = {}
+    if parameters is None:
+        parameters = Params()
+
     exit_code = execution(
         module_dir,
         module_name=module_name,
