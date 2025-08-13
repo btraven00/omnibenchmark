@@ -18,9 +18,20 @@ except ImportError:
     S3_AVAILABLE = False
 
 
-# XXX revisit this, conceptually. Here we're mixing the storage API with the concrete
-# MinIO implementation. We should use a factory pattern to create the appropriate storage object instead,
-# assuming we support multiple storage types.
+# XXX ARCHITECTURAL DEBT: Storage Factory Pattern Missing
+#
+# Current Issue: We're mixing the storage API abstraction with concrete MinIO implementation.
+# This creates tight coupling and makes it difficult to add new storage backends.
+#
+# Recommended Pattern:
+# class StorageFactory:
+#     @staticmethod
+#     def create_storage(storage_config: Storage) -> RemoteStorage:
+#         match storage_config.api:
+#             case StorageAPIEnum.s3: return MinIOStorage(...)
+#             case StorageAPIEnum.gcs: return GCSStorage(...)  # future
+#
+# This would allow proper dependency injection and easier testing with mock storage.
 def get_storage(
     storage_type: str,
     auth_options: dict,

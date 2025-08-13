@@ -207,6 +207,14 @@ def download_all_files(
 def checksum_all_files(benchmark: str):
     """Generate md5sums of all benchmark outputs"""
 
+    # ARCHITECTURAL NOTE: Business Logic in CLI Layer
+    # This function contains domain logic (checksum validation) that belongs in
+    # a service layer. During the LinkML → Pydantic migration, CLI commands retained
+    # business logic to maintain functionality while models were refactored.
+    #
+    # Future consideration: Extract to a ChecksumService that can be used by CLI,
+    # API endpoints, or other interfaces. CLI should only handle argument parsing
+    # and output formatting.
     # TODO(ben): move this logic away from CLI
     logger.info("Checking MD5 checksums... ")
     failed_checks_filenames = checksum_files(

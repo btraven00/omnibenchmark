@@ -76,7 +76,13 @@ class MinIOStorage(RemoteStorage):
         super().__init__(auth_options, benchmark, storage_options)
         assert "endpoint" in self.auth_options.keys()
 
-        # Initialize with a basic version manager - will be updated when benchmark is provided
+        # ARCHITECTURAL NOTE: Version Manager Coupling
+        # Storage directly instantiates version managers, creating tight coupling.
+        # During the LinkML → Pydantic migration, this pattern emerged to handle
+        # version validation within storage operations.
+        #
+        # Future consideration: Inject version manager as a dependency rather
+        # than creating it here. This would improve testability and separation of concerns.
         from omnibenchmark.versioning import BenchmarkVersionManager
 
         self.version_manager = BenchmarkVersionManager(

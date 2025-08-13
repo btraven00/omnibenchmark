@@ -267,6 +267,10 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
         None, description="Metric collectors"
     )
     storage: Optional[Storage] = Field(None, description="Remote storage configuration")
+    # Legacy Compatibility Fields - Migration Strategy
+    # These fields maintain backward compatibility during the LinkML → Pydantic transition.
+    # They're handled via property methods that delegate to the new structured fields.
+    # Future consideration: Remove after confirming no external YAML files use these fields.
     storage_api: Optional[StorageAPIEnum] = Field(
         None, description="Storage API type (deprecated, use storage.api)"
     )
@@ -588,6 +592,15 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
 
     def get_module_parameters(self, module: Union[str, Module]) -> Optional[List[Any]]:
         """Get module parameters by module/module_id."""
+        # ARCHITECTURAL NOTE: Circular Import Management
+        # This runtime import indicates inverted dependencies - the pure model layer
+        # is reaching into execution/business logic layers. During the LinkML → Pydantic
+        # migration, this pattern emerged to maintain functionality while avoiding
+        # import cycles.
+        #
+        # Future consideration: Move parameter processing logic to a service layer
+        # that depends on both model and execution modules, following dependency
+        # inversion principle.
         from omnibenchmark.benchmark import params  # Avoid circular imports
 
         module_obj = (
