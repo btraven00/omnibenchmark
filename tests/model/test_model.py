@@ -220,7 +220,6 @@ class TestBenchmark:
         assert benchmark.id == "complete_benchmark"
         assert len(benchmark.software_environments) == 2
         assert benchmark.metric_collectors is not None
-        assert benchmark.metric_collectors is not None
         assert len(benchmark.metric_collectors) == 1
         assert len(benchmark.stages) == 1
 
@@ -258,6 +257,7 @@ class TestBenchmark:
         merged = benchmark1.merge_with(benchmark2)
         assert merged.description == "Updated description"
         assert len(merged.stages) == 2
+        assert merged.metric_collectors is not None
         assert len(merged.metric_collectors) == 1
 
     def test_upgrade_to_latest(self):
@@ -380,20 +380,9 @@ class TestErrorCases:
                 id="incomplete",
                 description="Missing fields",
                 name="Incomplete Benchmark",
-                benchmarker="Test User",
-                version="1.0.0",
                 software_backend="conda",
                 software_environments=[],
                 stages=[],
-                storage={
-                    "api": "S3",
-                    "endpoint": "https://example.com",
-                    "bucket_name": "test",
-                },
-                storage_api="S3",
-                storage_bucket_name="test",
-                benchmark_yaml_spec="test.yaml",
-                api_version="1.0",
             )
 
         errors = excinfo.value.errors()

@@ -316,6 +316,22 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
                 envs.append(env_dict)
             data["software_environments"] = envs
 
+        # Generate parameter IDs for modules
+        if "stages" in data:
+            for stage in data["stages"]:
+                if "modules" in stage:
+                    for module in stage["modules"]:
+                        if "parameters" in module and module["parameters"]:
+                            for param in module["parameters"]:
+                                if "id" not in param and "values" in param:
+                                    # Generate a hash-based ID from the parameter values
+                                    import hashlib
+
+                                    param_str = str(sorted(param["values"]))
+                                    param["id"] = hashlib.sha256(
+                                        param_str.encode()
+                                    ).hexdigest()[:8]
+
         # Convert string storage to Storage object
         if "storage" in data and isinstance(data["storage"], str):
             data["storage"] = {
@@ -474,6 +490,17 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
         all_stages_outputs: List[Dict[str, str]] = []
         for stage in self.stages:
             stage_outputs = self.get_stage_outputs(stage)
+            # Substitute the actual stage_id into the template like the old LinkML code
+            stage_outputs = {
+                key: value.format(
+                    input="{input}",
+                    stage=stage.id,  # Substitute actual stage_id here
+                    module="{module}",
+                    params="{params}",
+                    dataset="{dataset}",
+                )
+                for key, value in stage_outputs.items()
+            }
             all_stages_outputs.append(stage_outputs)
 
         # Merge all stage outputs

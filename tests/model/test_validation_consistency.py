@@ -75,6 +75,7 @@ class TestValidationConsistency:
         assert complete.id == "test_benchmark"
         assert len(complete.stages) >= 2
         assert len(complete.software_environments) >= 2
+        assert complete.metric_collectors is not None
         assert len(complete.metric_collectors) >= 1
 
     def test_software_environment_validation(self):
@@ -349,6 +350,7 @@ class TestValidationConsistency:
         assert benchmark.version == "2.0.0"
         assert len(benchmark.software_environments) >= 2
         assert len(benchmark.stages) >= 2
+        assert benchmark.metric_collectors is not None
         assert len(benchmark.metric_collectors) >= 1
 
         # Validate the benchmark structure
@@ -361,7 +363,7 @@ class TestValidationConsistency:
             for module in stage.modules:
                 assert module.software_environment in env_ids
 
-        for collector in benchmark.metric_collectors:
+        for collector in benchmark.metric_collectors or []:
             assert collector.software_environment in env_ids
 
     def test_error_message_quality(self):
