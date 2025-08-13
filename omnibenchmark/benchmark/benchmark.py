@@ -18,7 +18,13 @@ from ._dot import export_to_dot
 
 
 class ExecutionContext:
-    """Encapsulates execution-specific context like paths and directories."""
+    """Encapsulates execution-specific context like paths and directories.
+
+    Created during LinkML → Pydantic migration to handle file system concerns
+    that the pure Benchmark model should not know about. This allows the model
+    to remain path-agnostic while providing execution operations with the
+    directory context they need for relative path resolution.
+    """
 
     def __init__(self, benchmark_yaml: Path, out_dir: Path = Path("out")):
         # base path is always the location of the benchmark YAML file
@@ -40,6 +46,33 @@ class ExecutionContext:
 class BenchmarkExecution:
     """
     BenchmarkExecution contains the execution context and the benchmark model.
+
+    This class was created during the LinkML → Pydantic migration to separate
+    pure data models from execution-specific operations that require file system
+    paths and directory context. It serves as an adapter between the pure
+    Benchmark model and the execution environment.
+
+    Architecture Notes:
+    - The Benchmark model (in omnibenchmark.model) is now path-agnostic and purely declarative
+    - BenchmarkExecution adds execution context (paths, directories, DAG building)
+    - This separation allows the model to be used independently for validation,
+      serialization, and other operations that don't require file system access
+
+    Architecture Note on DAG Usage:
+    This class builds a computational DAG for pre-execution analysis (path planning,
+    validation, visualization). While Snakemake builds its own DAG from the generated
+    rules, our DAG serves different purposes:
+    - Early validation of benchmark structure
+    - Execution path enumeration for output collection
+    - Visualization exports
+
+    Future consideration: Evaluate whether Snakemake's DAG APIs could replace
+    some of this functionality to reduce duplication.
+
+    Future Refactoring Considerations:
+    - This class currently has mixed responsibilities (model access + execution coordination)
+    - Consider splitting into separate ExecutionContext and BenchmarkOrchestrator classes
+    - The numerous getter methods suggest this may be serving as an anti-corruption layer
     """
 
     def __init__(self, benchmark_yaml: Path, out_dir: Path = Path("out")):
@@ -71,7 +104,11 @@ class BenchmarkExecution:
         return self.model.get_storage_endpoint()
 
     def get_model(self):
-        """Get the underlying Pydantic model."""
+        """Get the underlying Pydantic model.
+
+        Note: Direct model access - consider whether callers should use this
+        class's methods instead to maintain proper abstraction boundaries.
+        """
         return self.model
 
     def get_benchmark_name(self):
@@ -90,9 +127,14 @@ class BenchmarkExecution:
         return self.model.get_software_environments()
 
     def get_definition(self):
+        """Legacy method - returns the model for backward compatibility."""
         return self.model
 
     def get_definition_file(self) -> Path:
+        """Get the path to the benchmark definition file.
+
+        This bridges the gap between the path-agnostic model and execution context.
+        """
         return self.context.path
 
     def get_easyconfigs(self):
