@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from enum import Enum
+import re
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -288,6 +289,41 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
                     return version
             # If no match found, raise ValueError
             raise ValueError(f"Invalid API version: {v}")
+        return v
+
+    @field_validator("version")
+    @classmethod
+    def validate_version(cls, v: str) -> str:
+        """Validate that version follows strict semantic versioning format."""
+        if not isinstance(v, str):
+            raise ValueError("Version must be a string")
+
+        if not v or not v.strip():
+            raise ValueError("Version must be a non-empty string")
+
+        v = v.strip()
+
+        # Match semantic version pattern: x.y.z or x.y
+        # No leading zeros allowed (except for "0" itself)
+        pattern = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$"
+        if not re.match(pattern, v):
+            raise ValueError(
+                f"Version '{v}' does not follow strict semantic versioning format. "
+                "Expected x.y.z or x.y where x, y, z are non-negative integers without leading zeros."
+            )
+
+        return v
+
+    @field_validator("benchmark_yaml_spec")
+    @classmethod
+    def validate_benchmark_yaml_spec(cls, v: Optional[str]) -> Optional[str]:
+        """Validate benchmark_yaml_spec format if provided."""
+        if v is None:
+            return v
+
+        if not isinstance(v, str):
+            raise ValueError("benchmark_yaml_spec must be a string")
+
         return v
 
     # _benchmark_dir: Optional[Path] = None

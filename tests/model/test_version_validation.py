@@ -51,19 +51,21 @@ class TestVersionValidation:
             assert benchmark.version == version
 
     @pytest.mark.short
-    def test_numeric_version_coercion(self):
-        """Test that numeric values are converted to strings."""
+    def test_numeric_version_rejected(self):
+        """Test that numeric values are rejected (no auto-conversion)."""
         benchmark_data = self._get_minimal_benchmark_data()
 
-        # Float version
+        # Float version should be rejected
         benchmark_data["version"] = 1.0
-        benchmark = Benchmark(**benchmark_data)
-        assert benchmark.version == "1.0"
+        with pytest.raises(ValidationError) as exc_info:
+            Benchmark(**benchmark_data)
+        assert "Input should be a valid string" in str(exc_info.value)
 
-        # Float version with patch
-        benchmark_data["version"] = 2.1
-        benchmark = Benchmark(**benchmark_data)
-        assert benchmark.version == "2.1"
+        # Integer version should be rejected
+        benchmark_data["version"] = 2
+        with pytest.raises(ValidationError) as exc_info:
+            Benchmark(**benchmark_data)
+        assert "Input should be a valid string" in str(exc_info.value)
 
     @pytest.mark.short
     def test_invalid_version_formats(self):
@@ -97,32 +99,45 @@ class TestVersionValidation:
             benchmark_data["version"] = version
             with pytest.raises(ValidationError) as exc_info:
                 Benchmark(**benchmark_data)
-            assert "does not follow strict semantic versioning" in str(exc_info.value)
+            # Check for either semantic versioning error or string type error
+            error_msg = str(exc_info.value)
+            assert (
+                "does not follow strict semantic versioning" in error_msg
+                or "Input should be a valid string" in error_msg
+                or "must be a non-empty string" in error_msg
+            )
 
     @pytest.mark.short
-    def test_single_integer_conversion(self):
-        """Test that single integers fail validation after conversion."""
+    def test_single_integer_rejected(self):
+        """Test that single integers are rejected (no conversion)."""
         benchmark_data = self._get_minimal_benchmark_data()
-        benchmark_data["version"] = 1  # Will be converted to "1"
+        benchmark_data["version"] = 1  # Integer should be rejected
 
         with pytest.raises(ValidationError) as exc_info:
             Benchmark(**benchmark_data)
-        assert "does not follow strict semantic versioning" in str(exc_info.value)
+        assert "Input should be a valid string" in str(exc_info.value)
 
     @pytest.mark.short
-    def test_benchmark_yaml_spec_coercion(self):
-        """Test that benchmark_yaml_spec numeric values are converted to strings."""
+    def test_benchmark_yaml_spec_string_only(self):
+        """Test that benchmark_yaml_spec only accepts strings (no numeric coercion)."""
         benchmark_data = self._get_minimal_benchmark_data()
 
-        # Float yaml spec
+        # Float yaml spec should be rejected
         benchmark_data["benchmark_yaml_spec"] = 0.01
+        with pytest.raises(ValidationError) as exc_info:
+            Benchmark(**benchmark_data)
+        assert "Input should be a valid string" in str(exc_info.value)
+
+        # Integer yaml spec should be rejected
+        benchmark_data["benchmark_yaml_spec"] = 1
+        with pytest.raises(ValidationError) as exc_info:
+            Benchmark(**benchmark_data)
+        assert "Input should be a valid string" in str(exc_info.value)
+
+        # Valid string yaml spec should work
+        benchmark_data["benchmark_yaml_spec"] = "0.01"
         benchmark = Benchmark(**benchmark_data)
         assert benchmark.benchmark_yaml_spec == "0.01"
-
-        # Integer yaml spec
-        benchmark_data["benchmark_yaml_spec"] = 1
-        benchmark = Benchmark(**benchmark_data)
-        assert benchmark.benchmark_yaml_spec == "1"
 
         # None is allowed
         benchmark_data["benchmark_yaml_spec"] = None
@@ -145,7 +160,11 @@ class TestVersionValidation:
             benchmark_data["version"] = version
             with pytest.raises(ValidationError) as exc_info:
                 Benchmark(**benchmark_data)
-            assert "does not follow strict semantic versioning" in str(exc_info.value)
+            error_msg = str(exc_info.value)
+            assert (
+                "does not follow strict semantic versioning" in error_msg
+                or "must be a non-empty string" in error_msg
+            )
 
     @pytest.mark.short
     def test_zero_versions_allowed(self):

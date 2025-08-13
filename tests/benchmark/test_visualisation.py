@@ -11,12 +11,18 @@ from omnibenchmark.dag import DiGraph
 
 @pytest.mark.short
 def test_export_computational_to_dot(tmp_path):
+    import shutil
+
     benchmark_file = "../data/Benchmark_001.yaml"
     benchmark_file_path = Path(__file__).parent / benchmark_file
     output_file_path = tmp_path / "computational_graph.dot"
 
+    # Copy benchmark file to tmp_path to avoid writing to current directory
+    copied_benchmark_path = tmp_path / "Benchmark_001.yaml"
+    shutil.copy(benchmark_file_path, copied_benchmark_path)
+
     try:
-        benchmark = Benchmark(benchmark_file_path)
+        benchmark = Benchmark(copied_benchmark_path, out_dir=tmp_path / "out")
         dot = benchmark.export_to_dot()
         dot.write(str(output_file_path))
         assert (
@@ -51,9 +57,15 @@ def test_export_computational_to_dot_scaling(tmp_path):
 
 
 @pytest.mark.short
-def test_export_topology_to_mermaid():
+def test_export_topology_to_mermaid(tmp_path):
+    import shutil
+
     benchmark_file = "../data/Benchmark_001.yaml"
     benchmark_file_path = Path(__file__).parent / benchmark_file
+
+    # Copy benchmark file to tmp_path to avoid writing to current directory
+    copied_benchmark_path = tmp_path / "Benchmark_001.yaml"
+    shutil.copy(benchmark_file_path, copied_benchmark_path)
     expected_mermaid = """---
     title: Benchmark_001
     ---
@@ -97,7 +109,7 @@ def test_export_topology_to_mermaid():
     """
 
     try:
-        benchmark = Benchmark(benchmark_file_path)
+        benchmark = Benchmark(copied_benchmark_path, out_dir=tmp_path / "out")
         mermaid = benchmark.export_to_mermaid()
         assert clean(mermaid).startswith(clean(expected_mermaid))
     except Exception as e:
