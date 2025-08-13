@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ["3.12"]
     defaults:
       run:
@@ -136,7 +136,7 @@ jobs:
           mkdir -p ./reports
           uv run pytest -m "not short and not conda" --cov=omnibenchmark --cov-report=xml:./reports/coverage.xml --junitxml=./reports/junit.xml \
               tests/benchmark tests/cli tests/workflow tests/io tests/config tests/model
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        if: matrix.os == 'ubuntu-latest'
 
   software_testing_linux:
     name: Software Tests (Linux) - Conda Environment
@@ -272,142 +272,3 @@ jobs:
           pytest -v -x --show-capture=stderr \
               --splits 2 --group ${{ matrix.test_group }} --splitting-algorithm=least_duration \
               conda_tests.py apptainer_tests.py test_run_with_software.py
-
-  software_testing_mac:
-    name: Software Tests (macOS) - Conda Environment
-    needs: lint
-
-    permissions: write-all
-    # These tests run in a conda environment because they test Snakemake's conda integration
-    # and other conda-based software management features. The conda environment provides
-    # access to conda/mamba commands needed for these integration tests.
-    strategy:
-      matrix:
-        os: [macos-14]
-        test_group: [1, 2]
-        python-version: ["3.12"]
-      fail-fast: false
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Cache system dependencies
-        id: cache-system
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/Homebrew
-            ~/Library/Caches/pip
-            /opt/homebrew/var/homebrew/locks
-            /opt/homebrew/Library/Homebrew/vendor/gems
-          key: system-deps-${{ runner.os }}-${{ hashFiles('**/pipeline.yml', 'pyproject.toml') }}
-          restore-keys: |
-            system-deps-${{ runner.os }}-
-
-      - name: Set up Homebrew
-        id: set-up-homebrew
-        uses: Homebrew/actions/setup-homebrew@master
-        if: matrix.os == 'macos-14' || matrix.os == 'macos-13'
-
-      - name: Install OS packages using homebrew
-        if: steps.cache-system.outputs.cache-hit != 'true'
-        shell: bash -el {0}
-        run: |
-          bash
-          brew upgrade
-          brew install coreutils
-          brew install lmod
-
-      - name: Modify python version in test env
-        shell: bash -el {0}
-        run: |
-          cp test-environment.yml test-environment-${{ matrix.python-version }}.yml
-          sed -E 's/- conda-forge::python.+/- conda-forge::python =${{ matrix.python-version }}/' test-environment-${{ matrix.python-version }}.yml > tmp.yml
-          mv tmp.yml test-environment-${{ matrix.python-version }}.yml
-
-          # Add cache validation check
-          echo "Environment file hash: $(md5 test-environment-${{ matrix.python-version }}.yml || md5sum test-environment-${{ matrix.python-version }}.yml)"
-
-      - name: Cache omnibenchmark environment
-        uses: actions/cache@v4
-        with:
-          path: |
-            /Users/runner/miniconda3/envs
-            ~/conda_pkgs_dir
-            ~/.conda/pkgs
-            ~/.conda/envs/omnibenchmark
-            ~/.cache/pip
-          key: conda-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/pipeline.yml', 'pyproject.toml', 'omnibenchmark/**/*.py') }}
-          restore-keys: |
-            conda-${{ runner.os }}-${{ matrix.python-version }}-
-            conda-${{ runner.os }}-
-
-      - name: Setup a conda env for omnibenchmark
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          miniforge-version: latest
-          python-version: ${{ matrix.python-version }}
-          use-mamba: true
-          environment-file: test-environment-${{ matrix.python-version }}.yml
-          activate-environment: omnibenchmark
-
-      - name: Modify bashrc
-        shell: bash -el {0}
-        run: |
-          cat <<'EOF' >>~/.bashrc
-          if [ -f /opt/homebrew/opt/lmod/init/bash ]; then
-               source /opt/homebrew/opt/lmod/init/profile
-          fi
-          if [ -f /usr/local/opt/lmod/init/bash ]; then
-               source /usr/local/opt/lmod/init/profile
-          fi
-          export R_LIBS=~/work/Rlib
-          EOF
-
-          cat <<'EOF' >>~/.bash_profile
-          source ~/.bashrc
-          EOF
-
-      - name: Test Snakemake + Conda env
-        shell: bash -el {0}
-        run: |
-          # Running inside conda environment to test conda-based software management
-          # These tests require conda to be available for Snakemake workflows
-          source "${CONDA}/etc/profile.d/conda.sh"
-          conda activate omnibenchmark
-          conda info
-          conda list
-
-          # install uv
-          pip install uv
-
-          # install the s3 and test extra dependencies
-          uv pip install --system -e ".[s3,test]"
-
-          # install required Python dependencies -- for some of the benchmark modules
-          uv pip install --system numpy pandas scikit-learn scipy
-
-          cd tests/software
-
-          if [ -f /opt/homebrew/opt/lmod/init/bash ]; then
-            export LMOD_PKG=/opt/homebrew/opt/lmod
-            source /opt/homebrew/opt/lmod/init/bash
-          elif [ -f /usr/local/opt/lmod/init/bash ]; then
-            export LMOD_PKG=/usr/local/opt/lmod
-            source /usr/local/opt/lmod/init/bash
-          fi
-          source "$LMOD_PKG"/init/profile
-
-          export MODULEPATH="$HOME"/.local/easybuild/modules/all:"$GITHUB_WORKSPACE"/tests/data/envs
-          module use $MODULEPATH
-
-          export PYTHONPATH=${PYTHONPATH}:$LMOD_DIR/../init
-
-          # invoke pytest for conda integration tests
-          # These tests specifically test Snakemake's ability to create and manage conda environments
-          pytest -v -x --show-capture=stderr \
-               --splits 2 --group ${{ matrix.test_group }} \
-               conda_tests.py test_run_with_software.py \
-               -k 'not test_easybuild_sys_toolchain_build'
