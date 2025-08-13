@@ -115,9 +115,7 @@ def prepare_archive_software_conda(benchmark: Benchmark) -> List[Path]:
     for softenv in softenvs.values():
         if softenv.conda is None:
             continue
-        conda_file = (benchmark.context.directory / Path(softenv.conda)).relative_to(
-            Path(os.getcwd())
-        )
+        conda_file = benchmark.context.directory / Path(softenv.conda)
         if conda_file.is_file():
             files.append(conda_file)
         else:
