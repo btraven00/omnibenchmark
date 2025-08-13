@@ -2,18 +2,20 @@
 Version utility module for version string operations.
 
 This module provides utilities for working with semantic versions,
-without any dependency on the model or YAML serialization.
+using the standard packaging.version library for robust version handling.
 """
 
-from typing import Tuple, Optional
+from typing import Optional
 import re
+from packaging.version import Version as PackagingVersion, InvalidVersion
 
 
 class Version:
     """
-    A semantic version representation.
+    A semantic version representation using packaging.version.
 
-    This class handles version comparison and manipulation.
+    This class wraps packaging.version.Version to provide increment operations
+    and maintain compatibility with the existing API.
     Version format: x.y.z or x.y (where x, y, z are non-negative integers)
     """
 
@@ -27,29 +29,54 @@ class Version:
         Raises:
             ValueError: If version string is invalid
         """
-        self.version_string = str(version_string).strip()
-        self.major, self.minor, self.patch = self._parse_version(self.version_string)
-
-    def _parse_version(self, version_string: str) -> Tuple[int, int, Optional[int]]:
-        """Parse a version string into major, minor, patch components."""
         # Handle numeric inputs (float/int from YAML)
         if isinstance(version_string, (int, float)):
             version_string = str(version_string)
 
-        # Match semantic version pattern
-        pattern = r"^(\d+)\.(\d+)(?:\.(\d+))?$"
-        match = re.match(pattern, version_string)
+        self._original_string = str(version_string).strip()
 
-        if not match:
+        # Validate strict semantic version format first
+        pattern = r"^(\d+)\.(\d+)(?:\.(\d+))?$"
+        if not re.match(pattern, self._original_string):
             raise ValueError(
-                f"Invalid version format: '{version_string}'. Expected x.y.z or x.y"
+                f"Invalid version format: '{self._original_string}'. Expected x.y.z or x.y"
             )
 
-        major = int(match.group(1))
-        minor = int(match.group(2))
-        patch = int(match.group(3)) if match.group(3) else None
+        try:
+            self._version = PackagingVersion(self._original_string)
 
-        return major, minor, patch
+            # Additional validation for pre/post/dev releases
+            if (
+                self._version.is_prerelease
+                or self._version.is_postrelease
+                or self._version.is_devrelease
+            ):
+                raise ValueError(
+                    f"Only release versions are supported: '{self._original_string}'"
+                )
+
+        except InvalidVersion as e:
+            raise ValueError(
+                f"Invalid version format: '{self._original_string}'. Expected x.y.z or x.y"
+            ) from e
+
+    @property
+    def major(self) -> int:
+        """Major version component."""
+        return self._version.major
+
+    @property
+    def minor(self) -> int:
+        """Minor version component."""
+        return self._version.minor
+
+    @property
+    def patch(self) -> Optional[int]:
+        """Patch version component (None if not specified in original string)."""
+        # Check if original string had patch component
+        if self._original_string.count(".") >= 2:
+            return self._version.micro
+        return None
 
     def __str__(self) -> str:
         """Return the string representation of the version."""
@@ -65,6 +92,7 @@ class Version:
         """Check if two versions are equal."""
         if not isinstance(other, Version):
             return False
+        # Use original format comparison to preserve 1.2 != 1.2.0 behavior
         return (self.major, self.minor, self.patch) == (
             other.major,
             other.minor,
@@ -75,37 +103,29 @@ class Version:
         """Check if this version is less than another."""
         if not isinstance(other, Version):
             return NotImplemented
-
-        # Compare major
-        if self.major != other.major:
-            return self.major < other.major
-
-        # Compare minor
-        if self.minor != other.minor:
-            return self.minor < other.minor
-
-        # Compare patch (None is treated as 0)
-        self_patch = self.patch if self.patch is not None else 0
-        other_patch = other.patch if other.patch is not None else 0
-        return self_patch < other_patch
+        return self._version < other._version
 
     def __le__(self, other) -> bool:
         """Check if this version is less than or equal to another."""
-        return self == other or self < other
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._version <= other._version
 
     def __gt__(self, other) -> bool:
         """Check if this version is greater than another."""
         if not isinstance(other, Version):
             return NotImplemented
-        return not self <= other
+        return self._version > other._version
 
     def __ge__(self, other) -> bool:
         """Check if this version is greater than or equal to another."""
-        return self == other or self > other
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self._version >= other._version
 
     def __hash__(self) -> int:
         """Return hash of the version for use in sets/dicts."""
-        return hash((self.major, self.minor, self.patch))
+        return hash(self._version)
 
     def increment_minor(self) -> "Version":
         """Return a new Version with incremented minor version."""
@@ -117,9 +137,8 @@ class Version:
 
     def increment_patch(self) -> "Version":
         """Return a new Version with incremented patch version."""
-        if self.patch is None:
-            return Version(f"{self.major}.{self.minor}.1")
-        return Version(f"{self.major}.{self.minor}.{self.patch + 1}")
+        patch = self.patch if self.patch is not None else 0
+        return Version(f"{self.major}.{self.minor}.{patch + 1}")
 
 
 def parse_version(version_string: str) -> Version:
