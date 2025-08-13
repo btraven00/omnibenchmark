@@ -1,4 +1,5 @@
-name: Pixi + Tox Pipeline
+# This pipeline simplifies the running of linting, build, short and integration tests.
+name: pixi
 
 env:
   PIXI_VERSION: v0.51.0
@@ -27,14 +28,11 @@ jobs:
         with:
           pixi-version: ${{ env.PIXI_VERSION }}
           cache: true
-          auth-host: prefix.dev
-          auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
 
       - name: Run linting
         run: pixi run lint
 
-      - name: Run type checking (optional)
-        continue-on-error: true
+      - name: Run type checking
         run: pixi run typecheck
 
   build:
@@ -44,14 +42,14 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.9.0
         with:
           pixi-version: ${{ env.PIXI_VERSION }}
           cache: true
-          auth-host: prefix.dev
-          auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
 
       - name: Build wheel
         run: pixi run build
@@ -76,14 +74,12 @@ jobs:
         with:
           pixi-version: ${{ env.PIXI_VERSION }}
           cache: true
-          auth-host: prefix.dev
-          auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
 
       - name: Run short tests
         run: pixi run test-short
 
   test-python-versions:
-    name: Test Python 3.12 & 3.13
+    name: Test Python 3.13
     runs-on: ubuntu-latest
     needs: [build]
     steps:
@@ -95,8 +91,6 @@ jobs:
         with:
           pixi-version: ${{ env.PIXI_VERSION }}
           cache: true
-          auth-host: prefix.dev
-          auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
 
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
@@ -104,17 +98,10 @@ jobs:
           name: omnibenchmark-wheel
           path: dist/
 
-      - name: Set up Python versions for tox
-        uses: actions/setup-python@v5
-        with:
-          python-version: |
-            3.12
-            3.13
-
-      - name: Run tox tests with wheel
+      - name: Run Python 3.13 tests with wheel
         run: |
-          pixi run pip install dist/*.whl
-          pixi run test-tox
+          pixi run -e py313 pip install dist/*.whl
+          pixi run -e py313 test-py313
 
   test-integration:
     name: Integration Tests
@@ -135,8 +122,6 @@ jobs:
         with:
           pixi-version: ${{ env.PIXI_VERSION }}
           cache: true
-          auth-host: prefix.dev
-          auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
 
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
@@ -163,8 +148,8 @@ jobs:
       - name: Run integration tests
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            pixi run test-software
+            pixi run pytest -m "not short" && pixi run pytest tests/software/
           else
             # macOS - skip platform-specific tests
-            pixi run pytest -v tests/software/ -k "not apptainer"
+            pixi run pytest -m "not short" && pixi run pytest tests/software/ -k "not apptainer"
           fi

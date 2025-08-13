@@ -1,13 +1,18 @@
 [project]
 name = "omnibenchmark"
-version = "0.1.0"
+version = "0.3.0"
 description = "A tool for automated scientific benchmarking"
-authors = ["ben <ben.uzh@pm.me>"]
+authors = [
+    "imallona",
+    "danincicau",
+    "ben <ben.uzh@pm.me>",
+    "user <user@example.com>",
+]
 channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
 
 [dependencies]
-python = "==3.12"
+python = "3.12.*"
 pip = ">=24.1.2"
 
 # Core testing dependencies
@@ -21,17 +26,14 @@ ruff = "*"
 
 # Core dependencies for the package
 git = "*"
-pip = "*"
+
 
 [target.linux-64.dependencies]
 # Linux-specific software testing dependencies
-stress = "*"
-openmpi = "*"
 apptainer = "*"
 lua = "*"
 lua-luafilesystem = "*"
 lua-luaposix = "*"
-tcl = "*"
 tk = "*"
 
 [target.osx-64.dependencies]
@@ -87,14 +89,17 @@ build = "python -m build ."
 clean = "rm -rf dist/ build/ *.egg-info/ .pytest_cache/ .coverage"
 pip = "pip"
 
-# Tox for Python version testing
+# Python version testing
+# Tox for comprehensive testing (with library interactions like snakemake)
 test-tox = "tox"
+# Fast pixi alternative for CI (run with: pixi run -e py313 test-py313)
+test-py313 = "pytest -m short --ignore=tests/cli/test_archive.py --ignore=tests/cli/test_io.py --ignore=tests/cli/test_run_benchmark.py --ignore=tests/cli/test_run_module.py --ignore=tests/io/test_MinIOStorage.py --ignore=tests/io/test_storage.py --ignore=tests/workflow/test_run_workflow.py"
 
 [feature.docs.dependencies]
 # Documentation dependencies (optional feature)
 mkdocs = ">=1.6.0"
-mkdocs-material = "9.5.28"
-mkdocs-git-revision-date-localized-plugin = "1.2.6"
+mkdocs-material = "==9.5.28"
+mkdocs-git-revision-date-localized-plugin = "==1.2.6"
 mkdocs-bibtex = ">=2.16.0"
 mkdocs-click = "*"
 mike = "*"
@@ -103,8 +108,28 @@ mike = "*"
 # Documentation tasks (available when docs feature is enabled)
 docs-build = { cmd = "mkdocs build", cwd = "docs", description = "Build documentation" }
 docs-serve = { cmd = "mkdocs serve", cwd = "docs", description = "Serve documentation locally" }
-docs-deploy = { cmd = "mike deploy --push --update-aliases", cwd = "docs", description = "Deploy documentation with versioning" }
 
 [environments]
 default = { solve-group = "default" }
 docs = { features = ["docs"], solve-group = "default" }
+py313 = { features = [
+    "py313",
+], solve-group = "py313", no-default-feature = true }
+
+[feature.py313.dependencies]
+python = "3.13.*"
+pip = ">=24.1.2"
+# Core testing dependencies for py313
+pytest = ">=7.0"
+pytest-cov = ">=4.1.0"
+pytest-timeout = "==2.3.1"
+# Core dependencies for the package
+git = "*"
+
+[feature.py313.pypi-dependencies]
+# Install local package in development mode
+omnibenchmark = { path = ".", editable = true }
+
+[feature.py313.tasks]
+# Test task for Python 3.13 environment
+test-py313 = "pytest -m short --ignore=tests/cli/test_archive.py --ignore=tests/cli/test_io.py --ignore=tests/cli/test_run_benchmark.py --ignore=tests/cli/test_run_module.py --ignore=tests/io/test_MinIOStorage.py --ignore=tests/io/test_storage.py --ignore=tests/workflow/test_run_workflow.py"
