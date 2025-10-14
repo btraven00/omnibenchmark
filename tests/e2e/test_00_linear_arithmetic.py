@@ -3,7 +3,6 @@ import pytest
 from pathlib import Path
 import shutil
 import tempfile
-import os
 
 from tests.cli.cli_setup import OmniCLISetup
 
@@ -34,50 +33,23 @@ def test_linear_arithmetic_pipeline(
 
     # bundled_repos fixture already creates tmp_path/bundles symlink
 
-    # Create dummy environment.yml in system temp directory where Snakemake expects it
-    system_temp = Path(tempfile.gettempdir())
-    env_file = system_temp / "environment.yml"
-    env_file.write_text("""name: dummy
-channels:
-  - conda-forge
-dependencies:
-  - python=3.12
-""")
-
-    # Set up output directory
-    out_dir = tmp_path / "out"
-
-    with OmniCLISetup() as omni:
-        # Create environment.yml in multiple locations right before CLI execution
-        env_content = """name: dummy
+    # Create dummy conda environment file for Snakemake 9.x validation
+    # This is required because Snakemake 9.x validates environment files even when ignored
+    dummy_env_content = """name: omnibenchmark-dummy
 channels:
   - conda-forge
 dependencies:
   - python=3.12
 """
 
-        # Create in system temp directory
-        system_temp = Path(tempfile.gettempdir())
-        (system_temp / "environment.yml").write_text(env_content)
+    # Create in system temp directory where Snakemake looks for fallback files
+    system_temp = Path(tempfile.gettempdir())
+    (system_temp / "conda_not_provided.yml").write_text(dummy_env_content)
 
-        # Create in working directory (tmp_path)
-        (tmp_path / "environment.yml").write_text(env_content)
+    # Set up output directory
+    out_dir = tmp_path / "out"
 
-        # Create in output directory
-        out_dir.mkdir(exist_ok=True)
-        (out_dir / "environment.yml").write_text(env_content)
-
-        print(f"\n=== ENV FILES DEBUG ===")
-        print(
-            f"System temp: {system_temp / 'environment.yml'} exists: {(system_temp / 'environment.yml').exists()}"
-        )
-        print(
-            f"Working dir: {tmp_path / 'environment.yml'} exists: {(tmp_path / 'environment.yml').exists()}"
-        )
-        print(
-            f"Output dir: {out_dir / 'environment.yml'} exists: {(out_dir / 'environment.yml').exists()}"
-        )
-        print(f"=== END DEBUG ===\n")
+    with OmniCLISetup() as omni:
         result = omni.call(
             [
                 "run",

@@ -65,9 +65,9 @@ def create_metric_collector_rule(benchmark: Benchmark, collector: MetricCollecto
         # Hence we provide alternatives for `conda`, `envmodules`, `container` which do not exist, although it will not affect the normal flow
         # See https://github.com/snakemake/snakemake/releases/tag/v8.25.2
         conda:
-            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.conda) or "environment.yml"
+            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.conda) or "conda_not_provided.yml"
         envmodules:
-            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.envmodules) or "module/not_provided"
+            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.envmodules) or "module/not_provided/0.0.0"
         container:
             _get_environment_paths(benchmark,collector,SoftwareBackendEnum.apptainer) or "container.sif"
         params:
