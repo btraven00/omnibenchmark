@@ -17,8 +17,8 @@ stages:
         name: "Dataset 1 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_5d4f3fd.bundle
-          commit: 5d4f3fd
+          url: bundles/dummymodule_2e138f9.bundle
+          commit: 2e138f9
         parameters:
           - values: ["--evaluate", "1+2+3+4+5"]
       # this writes to out/data/D1/evaluate-20+5
@@ -26,8 +26,8 @@ stages:
         name: "Dataset 2 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_5d4f3fd.bundle
-          commit: 5d4f3fd
+          url: bundles/dummymodule_2e138f9.bundle
+          commit: 2e138f9
         parameters:
           - values: ["--evaluate", "20+5"]
     outputs:
@@ -40,13 +40,16 @@ stages:
         name: "Method 1 - Process data"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_5d4f3fd.bundle
-          commit: 5d4f3fd
+          url: bundles/dummymodule_2e138f9.bundle
+          commit: 2e138f9
         parameters:
-          - values: ["--evaluate", "1*2"]
+          # --data.raw will be passed as input by us
+          - values: ["--evaluate", "input+100", "--input", "data.raw"]
     inputs:
       - entries:
           - data.raw
     outputs:
       - id: methods.result
+        # XXX I think this is wrong. This module gets passed --name D1...
+        # but I expect name to be M1.
         path: "{dataset}_data.json"
