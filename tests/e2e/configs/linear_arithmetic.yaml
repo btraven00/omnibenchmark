@@ -1,0 +1,35 @@
+id: LinearArithmeticDataset
+description: Simple linear pipeline for e2e testing with arithmetic operations
+version: "1.0"
+benchmarker: "E2E Test Suite"
+api_version: "0.3.0"
+software_backend: host
+
+software_environments:
+  host:
+    description: "Host environment for direct execution"
+
+stages:
+  - id: data
+    modules:
+      # this writes to out/data/D1/evaluate-1+2+3+4+5
+      - id: D1
+        name: "Dataset 1 - Generate test values"
+        software_environment: "host"
+        repository:
+          url: bundles/dummymodule_5d4f3fd.bundle
+          commit: 5d4f3fd
+        parameters:
+          - values: ["--evaluate", "1+2+3+4+5"]
+      # this writes to out/data/D1/evaluate-20+5
+      - id: D2
+        name: "Dataset 2 - Generate test values"
+        software_environment: "host"
+        repository:
+          url: bundles/dummymodule_5d4f3fd.bundle
+          commit: 5d4f3fd
+        parameters:
+          - values: ["--evaluate", "20+5"]
+    outputs:
+      - id: data.raw
+        path: "{dataset}_data.json"

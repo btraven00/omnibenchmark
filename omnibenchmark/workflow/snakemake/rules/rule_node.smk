@@ -49,11 +49,11 @@ def _create_initial_node(benchmark, node, config, local_timeout):
         # Hence we provide alternatives for `conda`, `envmodules`, `container` which do not exist, although it will not affect the normal flow
         # See https://github.com/snakemake/snakemake/releases/tag/v8.25.2
         conda:
-            _get_environment_path(benchmark, node, SoftwareBackendEnum.conda) or "conda_not_provided.yml"
+            _get_environment_path(benchmark, node, SoftwareBackendEnum.conda) or "environment.yml"
         envmodules:
             _get_environment_path(benchmark, node, SoftwareBackendEnum.envmodules) or "module/not_provided/0.0.0"
         container:
-            _get_environment_path(benchmark, node, SoftwareBackendEnum.apptainer) or "container_not_provided.sif"
+            _get_environment_path(benchmark, node, SoftwareBackendEnum.apptainer) or "container.sif"
         params:
             repository_url = repository_url,
             commit_hash = commit_hash,
@@ -106,11 +106,11 @@ def _create_intermediate_node(benchmark, node, config, local_timeout):
         # Hence we provide alternatives for `conda`, `envmodules`, `container` which do not exist, although it will not affect the normal flow
         # See https://github.com/snakemake/snakemake/releases/tag/v8.25.2
         conda:
-            _get_environment_path(benchmark, node, SoftwareBackendEnum.conda) or "conda_not_provided.yml"
+            _get_environment_path(benchmark, node, SoftwareBackendEnum.conda) or "environment.yml"
         envmodules:
-            _get_environment_path(benchmark, node, SoftwareBackendEnum.envmodules) or "module/not_provided/0.0.0"
+            _get_environment_path(benchmark, node, SoftwareBackendEnum.envmodules) or "module/not_provided"
         container:
-            _get_environment_path(benchmark, node, SoftwareBackendEnum.apptainer) or "container_not_provided.sif"
+            _get_environment_path(benchmark, node, SoftwareBackendEnum.apptainer) or "container.sif"
         params:
             inputs_map = inputs_map,
             repository_url = repository_url,
@@ -167,7 +167,7 @@ def create_standalone_node_rule(node, config):
             script: get_script_path(RUN_MODULE)
 
 
-def _get_environment_path(benchmark: Benchmark, node: BenchmarkNode, software_backend: SoftwareBackendEnum):
+def _get_environment_path(benchmark: Benchmark, node: BenchmarkNode, software_backend: SoftwareBackendEnum) -> str | None:
     benchmark_dir = benchmark.context.directory
     environment = benchmark.get_benchmark_software_environments()[node.get_software_environment()]
     environment_path = Validator.get_environment_path(software_backend, environment, benchmark_dir)

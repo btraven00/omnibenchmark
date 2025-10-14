@@ -90,6 +90,11 @@ class SnakemakeEngine(WorkflowEngine):
 
         logging.getLogger("snakemake").setLevel(logging.DEBUG)
 
+        # Debug: Print the exact Snakemake command
+        print(f"\n=== SNAKEMAKE COMMAND DEBUG ===")
+        print(f"Command: snakemake {' '.join(argv)}")
+        print(f"=== END SNAKEMAKE DEBUG ===\n")
+
         # Execute snakemake script
         parser, args = parse_args(argv)
         return snakemake_cli(args, parser)

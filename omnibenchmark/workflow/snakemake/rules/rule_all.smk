@@ -65,11 +65,11 @@ def create_metric_collector_rule(benchmark: Benchmark, collector: MetricCollecto
         # Hence we provide alternatives for `conda`, `envmodules`, `container` which do not exist, although it will not affect the normal flow
         # See https://github.com/snakemake/snakemake/releases/tag/v8.25.2
         conda:
-            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.conda) or "conda_not_provided.yml"
+            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.conda) or "environment.yml"
         envmodules:
-            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.envmodules) or "module/not_provided/0.0.0"
+            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.envmodules) or "module/not_provided"
         container:
-            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.apptainer) or "container_not_provided.sif"
+            _get_environment_paths(benchmark,collector,SoftwareBackendEnum.apptainer) or "container.sif"
         params:
             inputs_map=updated_inputs_map,
             repository_url=repository_url,
@@ -92,7 +92,7 @@ def _compile_regex_pattern_for_collectors_input(pattern: str) -> re.Pattern[str]
     return pattern_regex
 
 
-def _get_environment_paths(benchmark: Benchmark, collector: MetricCollector, software_backend: SoftwareBackendEnum) -> str:
+def _get_environment_paths(benchmark: Benchmark, collector: MetricCollector, software_backend: SoftwareBackendEnum) -> str | None:
     benchmark_dir = benchmark.context.directory
     environment = benchmark.get_benchmark_software_environments()[collector.software_environment]
     environment_path = Validator.get_environment_path(software_backend, environment, benchmark_dir)

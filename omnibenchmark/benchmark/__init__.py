@@ -13,8 +13,12 @@ class Validator:
         software_backend: SoftwareBackendEnum,
         environment: SoftwareEnvironment,
         benchmark_dir: Path,
-    ) -> str:
-        """Get the environment path based on software backend and environment configuration."""
+    ) -> str | None:
+        """Get the environment path based on software backend and environment configuration.
+
+        Returns:
+            str: The resolved environment path, or None if no configuration is found for the backend.
+        """
         if software_backend == SoftwareBackendEnum.conda:
             env_path = environment.conda
         elif software_backend == SoftwareBackendEnum.docker:
@@ -27,9 +31,7 @@ class Validator:
             env_path = None
 
         if not env_path:
-            raise ValueError(
-                f"No environment configuration found for backend {software_backend}"
-            )
+            return None
 
         # If it's a relative path, resolve it relative to benchmark directory
         if not Path(env_path).is_absolute() and "://" not in env_path:

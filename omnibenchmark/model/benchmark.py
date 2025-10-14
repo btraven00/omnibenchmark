@@ -7,7 +7,13 @@ from enum import Enum
 import re
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_validator,
+    model_validator,
+    ValidationError as PydanticValidationError,
+)
 
 from omnibenchmark.utils import merge_dict_list  # type: ignore[import]
 from .validation import BenchmarkValidator, ValidationError
@@ -211,14 +217,20 @@ class SoftwareEnvironment(DescribableEntity):
 class SoftwareEnvironmentReference(BaseModel):
     """Reference to a software environment."""
 
-    software_environment: str = Field(..., description="Software environment ID")
+    software_environment: str = Field(
+        ...,
+        description="Software environment ID - must reference an environment defined in the software_environments section",
+    )
 
 
 class Module(DescribableEntity, SoftwareEnvironmentReference):
     """Module definition."""
 
     repository: Repository = Field(..., description="Module repository")
-    software_environment: str = Field(..., description="Software environment ID")
+    software_environment: str = Field(
+        ...,
+        description="Software environment ID - must reference an environment defined in the software_environments section",
+    )
     parameters: Optional[List[Parameter]] = Field(None, description="Module parameters")
     exclude: Optional[List[str]] = Field(None, description="Paths to exclude")
     outputs: Optional[List[IOFile]] = Field(None, description="Module outputs")
@@ -234,7 +246,10 @@ class MetricCollector(DescribableEntity, SoftwareEnvironmentReference):
     """Metric collector definition."""
 
     repository: Repository = Field(..., description="Repository information")
-    software_environment: str = Field(..., description="Software environment ID")
+    software_environment: str = Field(
+        ...,
+        description="Software environment ID - must reference an environment defined in the software_environments section",
+    )
     inputs: List[IOFile] = Field(..., description="Input files")
     outputs: List[IOFile] = Field(..., description="Output files")
 
@@ -260,13 +275,15 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
     version: str = Field(..., description="Benchmark version")
     software_backend: SoftwareBackendEnum = Field(..., description="Software backend")
     software_environments: List[SoftwareEnvironment] = Field(
-        ..., description="Available software environments"
+        ...,
+        description="Available software environments - required section that defines all software",
     )
     stages: List[Stage] = Field(..., description="Benchmark stages")
     metric_collectors: Optional[List[MetricCollector]] = Field(
         None, description="Metric collectors"
     )
-    storage: Optional[Storage] = Field(None, description="Remote storage configuration")
+    storage: Optional[Storage] = Field(None, description="Storage configuration")
+
     # Legacy Compatibility Fields - Migration Strategy
     # These fields maintain backward compatibility during the LinkML → Pydantic transition.
     # They're handled via property methods that delegate to the new structured fields.
@@ -379,7 +396,26 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
                 "endpoint": data["storage"],
             }
 
-        return cls(**data)
+        try:
+            return cls(**data)
+        except PydanticValidationError as e:
+            # Convert Pydantic validation errors to user-friendly messages
+            error_messages = []
+            for error in e.errors():
+                field_path = " -> ".join(str(x) for x in error["loc"])
+                error_type = error["type"]
+
+                if error_type == "missing":
+                    error_messages.append(f"Missing required field: {field_path}")
+                else:
+                    error_messages.append(
+                        f"Validation error in {field_path}: {error['msg']}"
+                    )
+
+            raise ValueError(
+                f"Benchmark configuration errors:\n\n"
+                + "\n\n".join(f"• {msg}" for msg in error_messages)
+            )
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Benchmark":
