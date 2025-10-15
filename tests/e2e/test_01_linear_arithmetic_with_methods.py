@@ -1,72 +1,10 @@
-import json
 import pytest
 from pathlib import Path
 import shutil
 import tempfile
 
 from tests.cli.cli_setup import OmniCLISetup
-
-
-def validate_pipeline_results(output_dir: Path, expected_results: dict[str, int]):
-    """
-    Validate that JSON files in the output directory contain expected results.
-
-    Args:
-        output_dir: Path to the output directory to search
-        expected_results: Dict mapping glob patterns to expected 'result' values
-                         e.g., {"D1/D1_data.json": 15, "D2/methods/M1/**/D2_data.json": 125}
-
-    Raises:
-        AssertionError: If any expected result doesn't match or files are missing
-    """
-    print(f"\n=== VALIDATING PIPELINE RESULTS ===")
-
-    for glob_pattern, expected_value in expected_results.items():
-        print(f"Looking for pattern: {glob_pattern} (expecting result={expected_value})")
-
-        # Find files matching the glob pattern
-        matching_files = list(output_dir.glob(glob_pattern))
-
-        assert len(matching_files) > 0, (
-            f"No files found matching pattern '{glob_pattern}' in {output_dir}"
-        )
-
-        print(f"  Found {len(matching_files)} matching file(s):")
-
-        # Validate each matching file
-        for file_path in matching_files:
-            print(f"    - {file_path.relative_to(output_dir)}")
-
-            # Check that file exists
-            assert file_path.exists(), f"File {file_path} does not exist"
-
-            # Load and validate JSON content
-            try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError) as e:
-                raise AssertionError(f"Failed to load JSON from {file_path}: {e}")
-
-            # Check that 'error' field is None (no errors occurred)
-            if 'error' in data:
-                assert data['error'] is None, (
-                    f"Error found in {file_path}: {data['error']}"
-                )
-                print(f"      ✓ error=None (no errors)")
-
-            # Check that 'result' field exists and matches expected value
-            assert 'result' in data, (
-                f"Missing 'result' field in {file_path}. Available fields: {list(data.keys())}"
-            )
-
-            actual_result = data['result']
-            assert actual_result == expected_value, (
-                f"Expected {expected_value}, got {actual_result}"
-            )
-
-            print(f"      ✓ result={actual_result} (matches expected)")
-
-    print(f"=== ALL RESULTS VALIDATED SUCCESSFULLY ===\n")
+from tests.e2e.result_validation import validate_pipeline_results, load_expected_results, get_test_name_from_function
 
 
 @pytest.fixture
@@ -160,15 +98,9 @@ dependencies:
             print(f"  - {json_file.relative_to(out_dir)}")
         print()
 
-        # Validate the arithmetic results with comprehensive checks
-        # This checks: file existence, error=None, and result values
-        expected_results = {
-            "data/D1/*/D1_data.json": 15,                   # 1+2+3+4+5 = 15
-            "data/D2/*/D2_data.json": 25,                   # 20+5 = 25
-            "data/D1/*/methods/M1/*/D1_data.json": 115,     # 15+100 = 115
-            "data/D2/*/methods/M1/*/D2_data.json": 125,     # 25+100 = 125
-        }
-
+        # Load expected results from JSON file and validate
+        test_name = get_test_name_from_function("test_linear_arithmetic_with_methods_pipeline")
+        expected_results = load_expected_results(test_name)
         validate_pipeline_results(out_dir, expected_results)
 
         # Additional verification: ensure we have the expected number of output files
