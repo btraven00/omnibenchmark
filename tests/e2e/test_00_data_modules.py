@@ -1,23 +1,23 @@
-import json
 import pytest
 from pathlib import Path
 import shutil
 import tempfile
 
 from tests.cli.cli_setup import OmniCLISetup
+from tests.e2e.result_validation import validate_pipeline_results, load_expected_results, get_test_name_from_function
 
 
 @pytest.fixture
-def linear_arithmetic_config():
-    """Get the path to the static linear arithmetic config."""
-    config_path = Path(__file__).parent / "configs" / "linear_arithmetic.yaml"
+def data_modules_config():
+    """Get the path to the data modules config."""
+    config_path = Path(__file__).parent / "configs" / "00_data_modules.yaml"
     return config_path
 
 
-def test_linear_arithmetic_pipeline(
-    linear_arithmetic_config, tmp_path, bundled_repos, keep_files
+def test_data_modules_pipeline(
+    data_modules_config, tmp_path, bundled_repos, keep_files
 ):
-    """Test a complete linear arithmetic pipeline using the omnibenchmark CLI.
+    """Test a data modules pipeline using the omnibenchmark CLI.
 
     This is a black-box test - we execute the CLI and validate outputs.
     """
@@ -28,8 +28,8 @@ def test_linear_arithmetic_pipeline(
         print(f"=== END TEMP PATH INFO ===\n")
 
     # Copy config to tmp_path
-    config_file_in_tmp = tmp_path / "linear_arithmetic.yaml"
-    shutil.copy2(linear_arithmetic_config, config_file_in_tmp)
+    config_file_in_tmp = tmp_path / "00_data_modules.yaml"
+    shutil.copy2(data_modules_config, config_file_in_tmp)
 
     # bundled_repos fixture already creates tmp_path/bundles symlink
 
@@ -77,37 +77,39 @@ dependencies:
             f"STDERR: {result.stderr}"
         )
 
-        # Now validate outputs contain expected values
+        # Debug: Show actual directory structure before validation (if debugging)
+        if keep_files:
+            print(f"\n=== ACTUAL DIRECTORY STRUCTURE ===")
+            print(f"Output directory: {out_dir}")
+            all_files = list(out_dir.rglob("*"))
+            for file_path in sorted(all_files):
+                if file_path.is_file():
+                    print(f"FILE: {file_path.relative_to(out_dir)}")
+                else:
+                    print(f"DIR:  {file_path.relative_to(out_dir)}/")
+            print(f"=== END DIRECTORY STRUCTURE ===\n")
 
-        # Check D1 data stage output (1+2+3+4+5 = 15)
-        d1_data_file = out_dir / "data" / "D1" / "evaluate-1+2+3+4+5" / "D1_data.json"
-        assert d1_data_file.exists(), f"D1 data output not found: {d1_data_file}"
+        # Load expected results from JSON file and validate
+        expected_results = load_expected_results("00_data_modules")
+        validate_pipeline_results(out_dir, expected_results, verbose=keep_files)
 
-        with open(d1_data_file) as f:
-            d1_data_result = json.load(f)
-        assert d1_data_result["result"] == 15, (
-            f"Expected D1 result=15, got {d1_data_result['result']}"
+        # Additional verification: ensure we have the expected number of output files
+        output_files = list(out_dir.rglob("*.json"))
+        if keep_files:
+            print(f"\nCreated {len(output_files)} total JSON output files:")
+            for output_file in output_files:
+                print(f"  - {output_file.relative_to(out_dir)}")
+
+        # We expect at least 2 files (2 datasets)
+        assert len(output_files) >= 2, (
+            f"Expected at least 2 JSON files, but found {len(output_files)}"
         )
-        assert d1_data_result["error"] is None
-
-        # Check D2 data stage output (20+5 = 25)
-        d2_data_file = out_dir / "data" / "D2" / "evaluate-20+5" / "D2_data.json"
-        assert d2_data_file.exists(), f"D2 data output not found: {d2_data_file}"
-
-        with open(d2_data_file) as f:
-            d2_data_result = json.load(f)
-        assert d2_data_result["result"] == 25, (
-            f"Expected D2 result=25, got {d2_data_result['result']}"
-        )
-        assert d2_data_result["error"] is None
-
-        # For now, only test the data stage (D1 and D2 datasets)
 
 
-def test_linear_arithmetic_output_structure(
-    linear_arithmetic_config, tmp_path, bundled_repos, keep_files
+def test_data_modules_output_structure(
+    data_modules_config, tmp_path, bundled_repos, keep_files
 ):
-    """Test that the linear pipeline creates the expected output directory structure."""
+    """Test that the data modules pipeline creates the expected output directory structure."""
 
     if keep_files:
         print(f"\n=== TEMP PATH FOR INSPECTION ===")
@@ -115,8 +117,8 @@ def test_linear_arithmetic_output_structure(
         print(f"=== END TEMP PATH INFO ===\n")
 
     # Copy config to tmp_path
-    config_file_in_tmp = tmp_path / "linear_arithmetic.yaml"
-    shutil.copy2(linear_arithmetic_config, config_file_in_tmp)
+    config_file_in_tmp = tmp_path / "00_data_modules.yaml"
+    shutil.copy2(data_modules_config, config_file_in_tmp)
 
     # bundled_repos fixture already creates tmp_path/bundles symlink
 
@@ -153,39 +155,13 @@ def test_linear_arithmetic_output_structure(
             f"STDERR: {result.stderr}"
         )
 
-        # Validate expected directory structure exists
-        expected_files = [
-            "data/D1/evaluate-1+2+3+4+5/D1_data.json",
-            "data/D2/evaluate-20+5/D2_data.json",
-        ]
-
-        for expected_file in expected_files:
-            file_path = out_dir / expected_file
-            assert file_path.exists(), f"Expected output file missing: {file_path}"
-
-            # Validate JSON content
-            with open(file_path) as f:
-                result = json.load(f)
-                assert "result" in result, f"Missing 'result' field in {expected_file}"
-                assert "error" in result, f"Missing 'error' field in {expected_file}"
-                assert result["error"] is None, (
-                    f"Unexpected error in {expected_file}: {result['error']}"
-                )
-
-        # Validate specific results
-        d1_file = out_dir / "data/D1/evaluate-1+2+3+4+5/D1_data.json"
-        with open(d1_file) as f:
-            d1_result = json.load(f)
-        assert d1_result["result"] == 15, f"D1: Expected 15, got {d1_result['result']}"
-
-        d2_file = out_dir / "data/D2/evaluate-20+5/D2_data.json"
-        with open(d2_file) as f:
-            d2_result = json.load(f)
-        assert d2_result["result"] == 25, f"D2: Expected 25, got {d2_result['result']}"
+        # Use result validation system to check structure and values
+        expected_results = load_expected_results("00_data_modules")
+        validate_pipeline_results(out_dir, expected_results, verbose=keep_files)
 
 
-def test_linear_arithmetic_idempotent(
-    linear_arithmetic_config, tmp_path, bundled_repos, keep_files
+def test_data_modules_idempotent(
+    data_modules_config, tmp_path, bundled_repos, keep_files
 ):
     """Test that running the same workflow twice produces identical results."""
 
@@ -195,8 +171,8 @@ def test_linear_arithmetic_idempotent(
         print(f"=== END TEMP PATH INFO ===\n")
 
     # Copy config to tmp_path
-    config_file_in_tmp = tmp_path / "linear_arithmetic.yaml"
-    shutil.copy2(linear_arithmetic_config, config_file_in_tmp)
+    config_file_in_tmp = tmp_path / "00_data_modules.yaml"
+    shutil.copy2(data_modules_config, config_file_in_tmp)
 
     # bundled_repos fixture already creates tmp_path/bundles symlink
 
@@ -233,10 +209,15 @@ def test_linear_arithmetic_idempotent(
             f"STDERR: {result1.stderr}"
         )
 
-        # Read D1 results from first run
-        d1_file = out_dir / "data" / "D1" / "evaluate-1+2+3+4+5" / "D1_data.json"
-        with open(d1_file) as f:
-            first_d1_result = json.load(f)
+        # Get results from first run using validation
+        expected_results = load_expected_results("00_data_modules")
+        validate_pipeline_results(out_dir, expected_results, verbose=keep_files)
+
+        # Store first run files for comparison
+        first_run_files = {}
+        for json_file in out_dir.rglob("*.json"):
+            with open(json_file, 'r') as f:
+                first_run_files[str(json_file.relative_to(out_dir))] = f.read()
 
         # Second run
         result2 = omni.call(
@@ -265,16 +246,21 @@ def test_linear_arithmetic_idempotent(
             f"STDERR: {result2.stderr}"
         )
 
-        # Read D1 results from second run
-        with open(d1_file) as f:
-            second_d1_result = json.load(f)
+        # Validate second run results
+        validate_pipeline_results(out_dir, expected_results, verbose=keep_files)
 
-        # Results should be identical
-        assert first_d1_result == second_d1_result, "D1 results changed between runs"
+        # Compare all files to ensure idempotency
+        for json_file in out_dir.rglob("*.json"):
+            file_key = str(json_file.relative_to(out_dir))
+            with open(json_file, 'r') as f:
+                second_run_content = f.read()
+            assert first_run_files[file_key] == second_run_content, (
+                f"File {file_key} changed between runs"
+            )
 
 
-def test_linear_arithmetic_cli_validation(
-    linear_arithmetic_config, tmp_path, bundled_repos, keep_files
+def test_data_modules_cli_validation(
+    data_modules_config, tmp_path, bundled_repos, keep_files
 ):
     """Test that the CLI handles the benchmark config correctly."""
 
@@ -284,8 +270,8 @@ def test_linear_arithmetic_cli_validation(
         print(f"=== END TEMP PATH INFO ===\n")
 
     # Copy config to tmp_path
-    config_file_in_tmp = tmp_path / "linear_arithmetic.yaml"
-    shutil.copy2(linear_arithmetic_config, config_file_in_tmp)
+    config_file_in_tmp = tmp_path / "00_data_modules.yaml"
+    shutil.copy2(data_modules_config, config_file_in_tmp)
 
     # bundled_repos fixture already creates tmp_path/bundles symlink
 
@@ -325,16 +311,6 @@ def test_linear_arithmetic_cli_validation(
         # Verify that output directory was created
         assert out_dir.exists(), "Output directory was not created"
 
-        # Verify that at least one output file was created
-        output_files = list(out_dir.rglob("*.json"))
-        assert len(output_files) >= 2, (
-            f"Expected at least 2 JSON output files (D1 and D2), got {len(output_files)}"
-        )
-
-        # Verify all output files contain valid JSON
-        for output_file in output_files:
-            with open(output_file) as f:
-                try:
-                    json.load(f)
-                except json.JSONDecodeError as e:
-                    pytest.fail(f"Invalid JSON in {output_file}: {e}")
+        # Use result validation system for comprehensive validation
+        expected_results = load_expected_results("00_data_modules")
+        validate_pipeline_results(out_dir, expected_results, verbose=keep_files)

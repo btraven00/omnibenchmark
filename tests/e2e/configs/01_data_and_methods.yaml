@@ -12,7 +12,7 @@ software_environments:
 stages:
   - id: data
     modules:
-      # this writes to out/data/D1/evaluate-1+2+3+4+5
+      # this writes to out/data/D1/.../D1_data.json
       - id: D1
         name: "Dataset 1 - Generate test values"
         software_environment: "host"
@@ -21,7 +21,8 @@ stages:
           commit: 2e138f9
         parameters:
           - values: ["--evaluate", "1+2+3+4+5"]
-      # this writes to out/data/D1/evaluate-20+5
+
+      # this writes to out/data/D2/.../D2_data.json
       - id: D2
         name: "Dataset 2 - Generate test values"
         software_environment: "host"
@@ -43,9 +44,12 @@ stages:
           url: bundles/dummymodule_2e138f9.bundle
           commit: 2e138f9
         parameters:
-          # --data.raw will be passed as input by us
+          # --data.raw will be passed as input by us, but we
+          # need to keep the module generic so we need to pass that
+          # information.
           - values: ["--evaluate", "input+100", "--input", "data.raw"]
     inputs:
+      # TODO: entries should be deprecated
       - entries:
           - data.raw
     outputs:

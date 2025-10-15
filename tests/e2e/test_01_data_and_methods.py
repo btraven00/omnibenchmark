@@ -8,18 +8,18 @@ from tests.e2e.result_validation import validate_pipeline_results, load_expected
 
 
 @pytest.fixture
-def linear_arithmetic_with_methods_config():
-    """Get the path to the static linear arithmetic config with methods."""
+def data_and_methods_config():
+    """Get the path to the data and methods config."""
     config_path = (
-        Path(__file__).parent / "configs" / "linear_arithmetic_with_methods.yaml"
+        Path(__file__).parent / "configs" / "01_data_and_methods.yaml"
     )
     return config_path
 
 
-def test_linear_arithmetic_with_methods_pipeline(
-    linear_arithmetic_with_methods_config, tmp_path, bundled_repos, keep_files
+def test_data_and_methods_pipeline(
+    data_and_methods_config, tmp_path, bundled_repos, keep_files
 ):
-    """Test a linear arithmetic pipeline with methods stage using the omnibenchmark CLI."""
+    """Test a data and methods pipeline using the omnibenchmark CLI."""
 
     if keep_files:
         print(f"\n=== TEMP PATH FOR INSPECTION ===")
@@ -27,8 +27,8 @@ def test_linear_arithmetic_with_methods_pipeline(
         print(f"=== END TEMP PATH INFO ===\n")
 
     # Copy config to tmp_path
-    config_file_in_tmp = tmp_path / "linear_arithmetic_with_methods.yaml"
-    shutil.copy2(linear_arithmetic_with_methods_config, config_file_in_tmp)
+    config_file_in_tmp = tmp_path / "01_data_and_methods.yaml"
+    shutil.copy2(data_and_methods_config, config_file_in_tmp)
 
     # bundled_repos fixture already creates tmp_path/bundles symlink
 
@@ -80,34 +80,35 @@ dependencies:
         # Check that the output directory was created
         assert out_dir.exists(), "Output directory was not created"
 
-        # Debug: Show actual directory structure before validation
-        print(f"\n=== ACTUAL DIRECTORY STRUCTURE ===")
-        print(f"Output directory: {out_dir}")
-        all_files = list(out_dir.rglob("*"))
-        for file_path in sorted(all_files):
-            if file_path.is_file():
-                print(f"FILE: {file_path.relative_to(out_dir)}")
-            else:
-                print(f"DIR:  {file_path.relative_to(out_dir)}/")
-        print(f"=== END DIRECTORY STRUCTURE ===\n")
+        # Debug: Show actual directory structure before validation (if debugging)
+        if keep_files:
+            print(f"\n=== ACTUAL DIRECTORY STRUCTURE ===")
+            print(f"Output directory: {out_dir}")
+            all_files = list(out_dir.rglob("*"))
+            for file_path in sorted(all_files):
+                if file_path.is_file():
+                    print(f"FILE: {file_path.relative_to(out_dir)}")
+                else:
+                    print(f"DIR:  {file_path.relative_to(out_dir)}/")
+            print(f"=== END DIRECTORY STRUCTURE ===\n")
 
-        # Show JSON files specifically
-        json_files = list(out_dir.rglob("*.json"))
-        print(f"Found {len(json_files)} JSON files:")
-        for json_file in sorted(json_files):
-            print(f"  - {json_file.relative_to(out_dir)}")
-        print()
+            # Show JSON files specifically
+            json_files = list(out_dir.rglob("*.json"))
+            print(f"Found {len(json_files)} JSON files:")
+            for json_file in sorted(json_files):
+                print(f"  - {json_file.relative_to(out_dir)}")
+            print()
 
         # Load expected results from JSON file and validate
-        test_name = get_test_name_from_function("test_linear_arithmetic_with_methods_pipeline")
-        expected_results = load_expected_results(test_name)
-        validate_pipeline_results(out_dir, expected_results)
+        expected_results = load_expected_results("01_data_and_methods")
+        validate_pipeline_results(out_dir, expected_results, verbose=keep_files)
 
         # Additional verification: ensure we have the expected number of output files
         output_files = list(out_dir.rglob("*.json"))
-        print(f"\nCreated {len(output_files)} total JSON output files:")
-        for output_file in output_files:
-            print(f"  - {output_file.relative_to(out_dir)}")
+        if keep_files:
+            print(f"\nCreated {len(output_files)} total JSON output files:")
+            for output_file in output_files:
+                print(f"  - {output_file.relative_to(out_dir)}")
 
         # We expect at least 4 files (2 datasets + 2 method results)
         assert len(output_files) >= 4, (

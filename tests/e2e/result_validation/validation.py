@@ -3,6 +3,8 @@ Validation utilities for omnibenchmark end-to-end tests.
 
 This module provides functions to validate pipeline results and load expected
 results from configuration files.
+
+It relies on the companion dummymodule structure, that is used to exercise e2e tests.
 """
 
 import json
@@ -10,7 +12,7 @@ from pathlib import Path
 from typing import Dict
 
 
-def validate_pipeline_results(output_dir: Path, expected_results: Dict[str, int]) -> None:
+def validate_pipeline_results(output_dir: Path, expected_results: Dict[str, int], verbose: bool = False) -> None:
     """
     Validate that JSON files in the output directory contain expected results.
 
@@ -18,14 +20,17 @@ def validate_pipeline_results(output_dir: Path, expected_results: Dict[str, int]
         output_dir: Path to the output directory to search
         expected_results: Dict mapping glob patterns to expected 'result' values
                          e.g., {"D1/D1_data.json": 15, "D2/methods/M1/*/D2_data.json": 125}
+        verbose: If True, print detailed validation info
 
     Raises:
         AssertionError: If any expected result doesn't match or files are missing
     """
-    print(f"\n=== VALIDATING PIPELINE RESULTS ===")
+    if verbose:
+        print(f"\n=== VALIDATING PIPELINE RESULTS ===")
 
     for glob_pattern, expected_value in expected_results.items():
-        print(f"Looking for pattern: {glob_pattern} (expecting result={expected_value})")
+        if verbose:
+            print(f"Looking for pattern: {glob_pattern} (expecting result={expected_value})")
 
         # Find files matching the glob pattern
         matching_files = list(output_dir.glob(glob_pattern))
@@ -34,11 +39,13 @@ def validate_pipeline_results(output_dir: Path, expected_results: Dict[str, int]
             f"No files found matching pattern '{glob_pattern}' in {output_dir}"
         )
 
-        print(f"  Found {len(matching_files)} matching file(s):")
+        if verbose:
+            print(f"  Found {len(matching_files)} matching file(s):")
 
         # Validate each matching file
         for file_path in matching_files:
-            print(f"    - {file_path.relative_to(output_dir)}")
+            if verbose:
+                print(f"    - {file_path.relative_to(output_dir)}")
 
             # Check that file exists
             assert file_path.exists(), f"File {file_path} does not exist"
@@ -55,7 +62,8 @@ def validate_pipeline_results(output_dir: Path, expected_results: Dict[str, int]
                 assert data['error'] is None, (
                     f"Error found in {file_path}: {data['error']}"
                 )
-                print(f"      ✓ error=None (no errors)")
+                if verbose:
+                    print(f"      ✓ error=None (no errors)")
 
             # Check that 'result' field exists and matches expected value
             assert 'result' in data, (
@@ -67,9 +75,11 @@ def validate_pipeline_results(output_dir: Path, expected_results: Dict[str, int]
                 f"Expected {expected_value}, got {actual_result}"
             )
 
-            print(f"      ✓ result={actual_result} (matches expected)")
+            if verbose:
+                print(f"      ✓ result={actual_result} (matches expected)")
 
-    print(f"=== ALL RESULTS VALIDATED SUCCESSFULLY ===\n")
+    if verbose:
+        print(f"=== ALL RESULTS VALIDATED SUCCESSFULLY ===\n")
 
 
 def load_expected_results(test_name: str, configs_dir: Path = None) -> Dict[str, int]:
