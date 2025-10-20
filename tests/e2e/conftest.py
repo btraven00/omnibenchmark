@@ -3,12 +3,17 @@ from tests.fixtures import bundled_repos  # noqa: F401 - pytest fixture
 
 
 def pytest_addoption(parser):
-    parser.addoption(
-        "--keep-files",
-        action="store_true",
-        default=False,
-        help="Keep temporary files after test execution for inspection",
-    )
+    # Check if --keep-files option already exists to avoid conflicts
+    try:
+        parser.addoption(
+            "--keep-files",
+            action="store_true",
+            default=False,
+            help="Keep temporary files after test execution for inspection",
+        )
+    except ValueError:
+        # Option already exists, skip adding it
+        pass
 
 
 @pytest.fixture
