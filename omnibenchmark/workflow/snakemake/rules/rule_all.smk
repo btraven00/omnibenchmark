@@ -74,6 +74,7 @@ def create_metric_collector_rule(benchmark: Benchmark, collector: MetricCollecto
             inputs_map=updated_inputs_map,
             repository_url=repository_url,
             commit_hash=commit_hash,
+            parameters=benchmark.get_metric_collector_parameters(collector),
             keep_module_logs=config['keep_module_logs']
         script: os.path.join(os.path.dirname(os.path.realpath(scripts.__file__)),'run_module.py')
 

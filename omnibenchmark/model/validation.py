@@ -131,9 +131,9 @@ class BenchmarkValidator:
                 all_outputs = self.get_outputs()  # type: ignore
                 output_ids = list(all_outputs.keys())  # type: ignore
                 for collector_input in collector.inputs:  # type: ignore
-                    if collector_input.id not in output_ids:  # type: ignore
+                    if collector_input not in output_ids:  # type: ignore
                         errors.append(
-                            f"Input with id '{collector_input.id}' for metric collector '{collector.id}' is not valid."  # type: ignore
+                            f"Input with id '{collector_input}' for metric collector '{collector.id}' is not valid."  # type: ignore
                         )
 
     def validate_software_environments(self) -> None:

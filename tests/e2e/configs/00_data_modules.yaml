@@ -12,7 +12,7 @@ software_environments:
 stages:
   - id: data
     modules:
-      # this writes to out/data/D1/evaluate-1+2+3+4+5
+      # this writes to out/data/D1/evaluate-1+1
       - id: D1
         name: "Dataset 1 - Generate test values"
         software_environment: "host"
@@ -20,8 +20,9 @@ stages:
           url: bundles/dummymodule_2e138f9.bundle
           commit: 2e138f9
         parameters:
-          - values: ["--evaluate", "1+2+3+4+5"]
-      # this writes to out/data/D1/evaluate-20+5
+          - values: ["--evaluate", "1+1"]
+
+      # this writes to out/data/D1/evaluate-2+2
       - id: D2
         name: "Dataset 2 - Generate test values"
         software_environment: "host"
@@ -29,7 +30,7 @@ stages:
           url: bundles/dummymodule_2e138f9.bundle
           commit: 2e138f9
         parameters:
-          - values: ["--evaluate", "20+5"]
+          - values: ["--evaluate", "2+2"]
     outputs:
       - id: data.raw
         path: "{dataset}_data.json"

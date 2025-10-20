@@ -47,9 +47,12 @@ def validate_non_empty_string(v: str) -> str:
 
 
 def validate_non_empty_commit(v: str) -> str:
-    """Validate commit hash is not empty."""
+    """Validate commit hash is not empty. Allows HEAD for debugging."""
     if not v or not v.strip():
         raise ValueError("Commit must be a non-empty string")
+    # Allow HEAD for debugging purposes
+    if v.strip().upper() == "HEAD":
+        return v.strip()
     return v
 
 
@@ -156,7 +159,7 @@ class Storage(BaseModel):
 class Parameter(BaseModel):
     """Parameter definition."""
 
-    id: str = Field(..., description="Parameter ID")
+    id: Optional[str] = Field(None, description="Parameter ID")
     values: List[str] = Field(..., description="Parameter values")
 
     @field_validator("values")
@@ -250,8 +253,11 @@ class MetricCollector(DescribableEntity, SoftwareEnvironmentReference):
         ...,
         description="Software environment ID - must reference an environment defined in the software_environments section",
     )
-    inputs: List[IOFile] = Field(..., description="Input files")
+    inputs: List[str] = Field(..., description="Input file IDs")
     outputs: List[IOFile] = Field(..., description="Output files")
+    parameters: Optional[List[Parameter]] = Field(
+        None, description="Metric collector parameters"
+    )
 
     def has_environment_reference(self, env_id: Optional[str] = None) -> bool:
         """Check if metric collector has a software environment reference."""
@@ -413,7 +419,7 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
                     )
 
             raise ValueError(
-                f"Benchmark configuration errors:\n\n"
+                "Benchmark configuration errors:\n\n"
                 + "\n\n".join(f"• {msg}" for msg in error_messages)
             )
 
@@ -658,6 +664,36 @@ class Benchmark(DescribableEntity, BenchmarkValidator):
     def get_metric_collectors(self) -> List[MetricCollector]:
         """Get metric collectors."""
         return self.metric_collectors or []
+
+    def get_metric_collector_parameters(
+        self, collector: Union[str, MetricCollector]
+    ) -> Optional[List[Any]]:
+        """Get metric collector parameters by collector/collector_id."""
+        # ARCHITECTURAL NOTE: Circular Import Management
+        # This runtime import indicates inverted dependencies - the pure model layer
+        # is reaching into execution/business logic layers. During the LinkML → Pydantic
+        # migration, this pattern emerged to maintain functionality while avoiding
+        # import cycles.
+        #
+        # Future consideration: Move parameter processing logic to a service layer
+        # that depends on both model and execution modules, following dependency
+        # inversion principle.
+        from omnibenchmark.benchmark import params  # Avoid circular imports
+
+        collector_obj = None
+        if isinstance(collector, MetricCollector):
+            collector_obj = collector
+        else:
+            # Find collector by ID
+            for mc in self.get_metric_collectors():
+                if mc.id == collector:
+                    collector_obj = mc
+                    break
+
+        if not collector_obj or not collector_obj.parameters:
+            return None
+
+        return [params.Params.from_cli_args(p.values) for p in collector_obj.parameters]  # type: ignore[misc]
 
     def is_initial(self, stage: Stage) -> bool:
         """Check if a stage is initial (has no inputs)."""

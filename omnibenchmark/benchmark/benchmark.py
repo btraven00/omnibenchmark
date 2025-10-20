@@ -207,6 +207,10 @@ class BenchmarkExecution:
     def get_metric_collectors(self):
         return self.model.get_metric_collectors()
 
+    def get_metric_collector_parameters(self, collector):
+        """Get metric collector parameters by collector/collector_id."""
+        return self.model.get_metric_collector_parameters(collector)
+
     def get_stage_ids(self):
         """Get all stage IDs."""
         return [stage.id for stage in self.model.stages]

@@ -1,5 +1,5 @@
-id: LinearArithmeticDataset
-description: Simple linear pipeline for e2e testing with arithmetic operations
+id: LinearArithmeticWithMetrics
+description: Simple linear pipeline for e2e testing with arithmetic operations and metrics collection
 version: "1.0"
 benchmarker: "E2E Test Suite"
 api_version: "0.3.0"
@@ -55,5 +55,26 @@ stages:
     outputs:
       - id: methods.result
         # XXX I think this is wrong. This module gets passed --name D1...
-        # but I expect name to be M1.
+        # but I expect name to be M1?
         path: "{dataset}_data.json"
+
+metric_collectors:
+  - id: MC1
+    name: "Gather and calculate metrics from method results"
+    software_environment: "host"
+    repository:
+      #url: bundles/dummycollector_7a3f36b.bundle
+      #commit: 82fb864
+      url: ~/lab/ob-test-collector
+      commit: HEAD
+    # FIXME: metric collector does not support parameters
+    inputs:
+      # FIXME - the inputs are passed in a very weird way: space-separated
+      # after --methods.result ONE TWO THREE.
+      # this is a quite convoluted way of passing data, and it probably
+      # will break for a few reasons.
+      - methods.result
+    outputs:
+      - id: metrics.summary
+        # TODO: this "input" here is really unintuitive. it really means "output" dir.
+        path: "{input}/metrics/metrics.json"
