@@ -220,8 +220,11 @@ def run_standard_pipeline_test(
     # Setup environment
     config_file_in_tmp = runner.setup_test_environment(config_path, config_filename)
 
-    # Execute CLI
-    runner.execute_cli_command(config_file_in_tmp, additional_cli_args)
+    # Execute CLI with default --continue-on-error flag
+    default_args = ["--continue-on-error"]
+    if additional_cli_args:
+        default_args.extend(additional_cli_args)
+    runner.execute_cli_command(config_file_in_tmp, default_args)
 
     # Validate results
     runner.validate_results(test_name)

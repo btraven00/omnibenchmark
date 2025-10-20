@@ -17,8 +17,8 @@ stages:
         name: "Dataset 1 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           - values: ["--evaluate", "1+1"]
 
@@ -27,8 +27,8 @@ stages:
         name: "Dataset 2 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           - values: ["--evaluate", "2+2"]
     outputs:
@@ -41,8 +41,8 @@ stages:
         name: "Method 1 - Process data"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           # --data.raw will be passed as input by us, but we
           # need to keep the module generic so we need to pass that
@@ -56,4 +56,4 @@ stages:
       - id: methods.result
         # XXX I think this is wrong. This module gets passed --name D1...
         # but I expect name to be M1.
-        path: "{dataset}_data.json"
+        path: "{dataset}_method.json"

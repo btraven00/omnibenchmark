@@ -17,8 +17,8 @@ stages:
         name: "Dataset 1 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           - values: ["--evaluate", "1+1"]
 
@@ -27,8 +27,8 @@ stages:
         name: "Dataset 2 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           - values: ["--evaluate", "2+2"]
     outputs:

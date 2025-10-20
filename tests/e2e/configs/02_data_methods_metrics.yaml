@@ -17,8 +17,8 @@ stages:
         name: "Dataset 1 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           - values: ["--evaluate", "1+1"]
 
@@ -27,8 +27,8 @@ stages:
         name: "Dataset 2 - Generate test values"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           - values: ["--evaluate", "2+2"]
     outputs:
@@ -41,8 +41,8 @@ stages:
         name: "Method 1 - Process data"
         software_environment: "host"
         repository:
-          url: bundles/dummymodule_2e138f9.bundle
-          commit: 2e138f9
+          url: bundles/dummymodule_4ff8427.bundle
+          commit: 4ff8427
         parameters:
           # --data.raw will be passed as input by us, but we
           # need to keep the module generic so we need to pass that
@@ -63,10 +63,8 @@ metric_collectors:
     name: "Gather and calculate metrics from method results"
     software_environment: "host"
     repository:
-      #url: bundles/dummycollector_7a3f36b.bundle
-      #commit: 82fb864
-      url: ~/lab/ob-test-collector
-      commit: HEAD
+      url: bundles/dummycollector_9e3a99a.bundle
+      commit: 9e3a99a
     # FIXME: metric collector does not support parameters
     inputs:
       # FIXME - the inputs are passed in a very weird way: space-separated

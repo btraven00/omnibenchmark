@@ -31,6 +31,7 @@ def test_data_modules_pipeline(
         tmp_path=tmp_path,
         keep_files=keep_files,
         min_expected_files=2,  # We expect 2 data files (D1_data.json, D2_data.json, excluding symlinks)
+        additional_cli_args=["-y"],
     )
 
 
@@ -45,6 +46,7 @@ def test_data_modules_output_structure(
         tmp_path=tmp_path,
         keep_files=keep_files,
         min_expected_files=2,
+        additional_cli_args=["-y"],
     )
 
 
@@ -62,14 +64,18 @@ def test_data_modules_idempotent(
     )
 
     # First run
-    runner.execute_cli_command(config_file_in_tmp, debug_label="first run")
+    runner.execute_cli_command(
+        config_file_in_tmp, ["--continue-on-error", "-y"], debug_label="first run"
+    )
     runner.validate_results(test_name)
 
     # Store first run files for comparison
     first_run_files = store_pipeline_files(runner.out_dir)
 
     # Second run
-    runner.execute_cli_command(config_file_in_tmp, debug_label="second run")
+    runner.execute_cli_command(
+        config_file_in_tmp, ["--continue-on-error", "-y"], debug_label="second run"
+    )
     runner.validate_results(test_name)
 
     # Compare files to ensure idempotency
@@ -89,4 +95,5 @@ def test_data_modules_cli_validation(
         tmp_path=tmp_path,
         keep_files=keep_files,
         min_expected_files=2,
+        additional_cli_args=["-y"],
     )
