@@ -10,7 +10,9 @@ from omnibenchmark.benchmark.repository_utils import (
     get_module_repository_info,
     resolve_module_repository,
 )
-from omnibenchmark.benchmark.validation_core import (
+
+# TODO: move to validation engine
+from omnibenchmark.benchmark.metadata import (
     ValidationResult,
     ValidationIssue,
     ValidationSeverity,
@@ -115,7 +117,7 @@ def extract_citation_metadata(
         RuntimeWarning: If no cloned repositories are found
         CitationExtractionError: If strict=True and errors found (unless warn_mode=True)
     """
-    modules = benchmark.get_converter().get_modules()
+    modules = benchmark.model.get_modules()
     module_results = {}
     found_any_repos = False
     all_issues = []

@@ -13,7 +13,7 @@ from omnibenchmark.benchmark.repository_utils import (
     get_module_repository_info,
     resolve_module_repository,
 )
-from omnibenchmark.benchmark.validation_core import (
+from omnibenchmark.benchmark.metadata import (
     validate_module_files,
     ValidationSeverity,
     ValidationException,
@@ -197,7 +197,7 @@ def validate_module(ctx, benchmark, module, validate_all, warn, format, out):
         ctx.exit(1)
 
     # Get modules to validate
-    modules = b.get_converter().get_modules()
+    modules = b.model.get_modules()
 
     if module:
         # Validate specific module
