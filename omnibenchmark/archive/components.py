@@ -47,7 +47,7 @@ def prepare_archive_code(benchmark: BenchmarkExecution) -> List[Path]:
     Returns:
         List[Path]: The filenames of all code to archive
     """
-    from omnibenchmark.git.clone import clone_module
+    from omnibenchmark.git.clone_legacy import clone_module
 
     nodes = benchmark.get_nodes()
     repositories = set()
