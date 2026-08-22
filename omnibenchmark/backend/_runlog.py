@@ -74,6 +74,21 @@ def host_is_authoritative(snakemake_cmd: Optional[Iterable[str]]) -> bool:
     return True
 
 
+def host_record(manifest: Optional[Dict] = None) -> Dict:
+    """The comparability-relevant slice of a manifest (design/012 §3.8).
+
+    One extractor for both the run log and the snapshot descriptor, so a
+    snapshot's recorded hardware and its run's recorded hardware are the same
+    shape and can be compared field for field.
+    """
+    manifest = manifest or {}
+    return {
+        "host": {field: manifest.get(field) for field in HOST_FIELDS},
+        "slurm": manifest.get("slurm"),
+        "host_authoritative": host_is_authoritative(manifest.get("snakemake_cmd")),
+    }
+
+
 def plan_hash(benchmark_yaml_path: Path) -> str:
     """Short content hash of a benchmark YAML, used to name its archived copy."""
     return hashlib.sha256(Path(benchmark_yaml_path).read_bytes()).hexdigest()[:8]
@@ -119,9 +134,7 @@ def append_run(
         "starts_from": list(starts_from),
         "imported": imported,
         "produced": produced,
-        "host": {field: manifest.get(field) for field in HOST_FIELDS},
-        "slurm": manifest.get("slurm"),
-        "host_authoritative": host_is_authoritative(manifest.get("snakemake_cmd")),
+        **host_record(manifest),
     }
     with open(metadata_dir / RUNLOG, "a") as fh:
         fh.write(json.dumps(entry) + "\n")

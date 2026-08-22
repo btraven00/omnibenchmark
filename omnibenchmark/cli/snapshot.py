@@ -15,6 +15,7 @@ from omnibenchmark.snapshot import (
     select,
     verify as verify_snapshot,
 )
+from omnibenchmark.snapshot.compat import prefix_hash
 from omnibenchmark.snapshot.plan import BUILTIN_LABEL, label_stage, stage_closure
 
 registry_option = click.option(
@@ -93,6 +94,8 @@ def push(benchmark, until_stage, slice_by, only_values, out_dir, registry, force
         label_stage=binding_stage,
         ob_version=_ob_version(),
         n_files=len(files),
+        prefix_hash=prefix_hash(model, stages),
+        host=_host_of(out_dir),
     )
     try:
         dest = LocalSnapshotStore(registry).push(
@@ -143,6 +146,25 @@ def verify_cmd(ref, shallow, registry):
         sys.exit(1)
     snap = store.load(snap_dir)
     click.echo(f"{snap.id}: ok ({snap.n_files} files)")
+
+
+def _host_of(out_dir):
+    """The hardware the tree being published was produced on, if it is recorded.
+
+    Read from the run's own manifest rather than from this machine: publishing
+    may happen anywhere, but the numbers were produced where they were produced.
+    """
+    import json
+
+    from omnibenchmark.backend._runlog import host_record
+
+    manifest = out_dir / ".metadata" / "manifest.json"
+    if not manifest.is_file():
+        return None
+    try:
+        return host_record(json.loads(manifest.read_text()))
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def _ob_version():

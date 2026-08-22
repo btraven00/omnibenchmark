@@ -7,6 +7,7 @@ Layer: orchestration. Depends on: core, storage.
 Design: docs/design/012-incremental-snapshots.md
 """
 
+from .compat import Problem, check, hardware_class, is_compatible, prefix_hash
 from .extent import Extent, lineage, slice_value
 from .link import place, select
 from .store import (
@@ -20,6 +21,11 @@ from .store import (
 
 __all__ = [
     "Extent",
+    "Problem",
+    "check",
+    "hardware_class",
+    "is_compatible",
+    "prefix_hash",
     "lineage",
     "slice_value",
     "select",

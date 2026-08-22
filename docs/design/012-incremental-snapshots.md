@@ -226,6 +226,13 @@ exists for (an author asserting that a cosmetic change above the cut is
 irrelevant) survives, because the mismatch is a warning and not a refusal. §3.5
 makes this worth doing: Snakemake will not catch the mismatch either.
 
+Narrowing matters for the warning to be worth reading: `prefix_hash` drops
+metric collectors (downstream of any cut by definition) and restricts software
+environments to those the kept modules reference, so an edit below the cut
+cannot change the hash above it. Verified: repointing a downstream module's
+commit leaves the hash untouched, while repointing a covered module's commit
+changes it.
+
 Should the warning prove to be the common case rather than the rare one, promote
 it to the gate; a per-branch prefix hash (trunk + that branch's modules) then also
 recovers partial reuse when a dataset is added, which is the one case the
@@ -692,9 +699,15 @@ content-addressed `benchmark-<sha8>.yaml` beside the overwritten
 earlier outputs were produced under. `manifest.json` gains only the `slurm`
 field, so 007 §4.5's stability guarantee holds.
 
-**Phase 3 — compatibility and equivalence gates.** `is_compatible` on
-`(major, minor)` with the prefix-hash warning (§3.2); `hardware_class()` and the
-per-stage verdict; `--allow-mixed-hardware`; `ob snapshot verify`.
+**Phase 3 — compatibility and equivalence gates.** *(implemented)*
+`snapshot/compat.py`: `is_compatible` on `(major, minor)`, `prefix_hash`
+(delegating to `Benchmark.summary_hash()` on a stage-narrowed copy, so the two
+cannot drift), `hardware_class()`, and `check()` returning ordered `Problem`s.
+The descriptor records `prefix_hash` and the producing host at push time;
+`ob run --from-snapshot` runs the gate **before anything is linked**, so a
+rejected snapshot leaves the working directory untouched. `--allow-mixed-hardware`
+overrides the hardware error only. Snapshots published before the gate existed
+carry no `prefix_hash` or `host` and simply skip those checks.
 
 **Phase 4 — descriptor, archives, S3.** `Snapshot`, `tarfile` per-branch
 archives, `S3SnapshotStore` over `StorageService`, `snapshots/` prefix, digest

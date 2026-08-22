@@ -43,6 +43,10 @@ class Snapshot:
     ob_version: Optional[str] = None
     n_files: int = 0
     manifest_sha256: Optional[str] = None
+    # Recorded for the compatibility gate (§3.2/§3.8); absent on snapshots
+    # published before the gate existed, which then skip those checks.
+    prefix_hash: Optional[str] = None
+    host: Optional[dict] = None
 
     @property
     def id(self) -> str:
@@ -57,6 +61,8 @@ class Snapshot:
             "ob_version": self.ob_version,
             "n_files": self.n_files,
             "manifest_sha256": self.manifest_sha256,
+            "prefix_hash": self.prefix_hash,
+            "host": self.host,
         }
 
     @classmethod
@@ -69,6 +75,8 @@ class Snapshot:
             ob_version=d.get("ob_version"),
             n_files=d.get("n_files", 0),
             manifest_sha256=d.get("manifest_sha256"),
+            prefix_hash=d.get("prefix_hash"),
+            host=d.get("host"),
         )
 
 

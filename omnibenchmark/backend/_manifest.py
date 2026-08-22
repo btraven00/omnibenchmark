@@ -63,6 +63,36 @@ def write_run_manifest(
     if run_id is None:
         run_id = str(uuid.uuid4())
 
+    manifest = {
+        "run_id": run_id,
+        "ob_version": _ob_version(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        **collect_host(),
+    }
+
+    manifest_path = metadata_dir / "manifest.json"
+    with open(manifest_path, "w") as fh:
+        json.dump(manifest, fh, indent=2)
+        fh.write("\n")
+
+    return manifest
+
+
+def _ob_version():
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        return _pkg_version("omnibenchmark")
+    except Exception:
+        return None
+
+
+def collect_host() -> dict:
+    """Hardware facts about this machine.
+
+    Split out of :func:`write_run_manifest` so the snapshot compatibility gate
+    can ask the same question before a manifest exists.
+    """
     uname = platform.uname()
 
     cpu_count = None
@@ -156,19 +186,9 @@ def write_run_manifest(
         # gpu_devices as None.
         pass
 
-    try:
-        from importlib.metadata import version as _pkg_version
-
-        ob_version = _pkg_version("omnibenchmark")
-    except Exception:
-        ob_version = None
-
     from omnibenchmark.backend._runlog import slurm_allocation
 
-    manifest = {
-        "run_id": run_id,
-        "ob_version": ob_version,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+    return {
         "hostname": uname.node,
         "platform": sys.platform,
         "os": f"{uname.system} {uname.release} {uname.version}".strip(),
@@ -181,10 +201,3 @@ def write_run_manifest(
         "gpu_devices": gpu_devices,
         "slurm": slurm_allocation(),
     }
-
-    manifest_path = metadata_dir / "manifest.json"
-    with open(manifest_path, "w") as fh:
-        json.dump(manifest, fh, indent=2)
-        fh.write("\n")
-
-    return manifest

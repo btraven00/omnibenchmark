@@ -161,6 +161,16 @@ def format_pydantic_errors(e: PydanticValidationError) -> str:
     ),
 )
 @click.option(
+    "--allow-mixed-hardware",
+    is_flag=True,
+    default=False,
+    help=(
+        "Reuse a snapshot produced on different hardware even where a module "
+        "declares requires_capabilities. Timings, and on a GPU the results "
+        "themselves, may not be comparable."
+    ),
+)
+@click.option(
     "--snapshot-registry",
     type=click.Path(path_type=Path),
     default=None,
@@ -184,6 +194,7 @@ def run(
     telemetry_output,
     with_capability,
     from_snapshot,
+    allow_mixed_hardware,
     snapshot_registry,
     snakemake_args,
 ):
@@ -244,6 +255,7 @@ def run(
         telemetry_output=telemetry_output,
         available_capabilities=set(with_capability),
         from_snapshot=from_snapshot,
+        allow_mixed_hardware=allow_mixed_hardware,
         snapshot_registry=snapshot_registry,
         snakemake_args=list(snakemake_args),
     )
@@ -264,6 +276,7 @@ def _run_benchmark(
     telemetry_output=None,
     available_capabilities=None,
     from_snapshot=None,
+    allow_mixed_hardware=False,
     snapshot_registry=None,
     snakemake_args=None,
 ):
@@ -319,7 +332,12 @@ def _run_benchmark(
     materialised = None
     if from_snapshot:
         materialised = _materialise_snapshot(
-            from_snapshot, snapshot_registry, out_dir_path
+            from_snapshot,
+            snapshot_registry,
+            out_dir_path,
+            benchmark=b,
+            allow_mixed_hardware=allow_mixed_hardware,
+            snakemake_args=snakemake_args,
         )
         if materialised is None:
             return
@@ -1030,16 +1048,28 @@ def _append_run_entry(
         logger.warning(f"Could not append to the run log: {e}")
 
 
-def _materialise_snapshot(ref, registry, out_dir: Path):
+def _materialise_snapshot(
+    ref,
+    registry,
+    out_dir: Path,
+    benchmark=None,
+    allow_mixed_hardware: bool = False,
+    snakemake_args=None,
+):
     """Hardlink a published snapshot into *out_dir*.
 
     Returns ``(snapshot_id, n_paths)``, or None when the snapshot could not be
-    used (the error has already been reported).
+    used (the error has already been reported). The compatibility gate runs
+    before anything is linked, so a rejected snapshot leaves the working
+    directory untouched.
     """
+    from omnibenchmark.backend._manifest import collect_host
+    from omnibenchmark.backend._runlog import host_record
     from omnibenchmark.snapshot import (
         DEFAULT_REGISTRY,
         LocalSnapshotStore,
         SnapshotIntegrityError,
+        check,
         materialize,
     )
 
@@ -1047,8 +1077,30 @@ def _materialise_snapshot(ref, registry, out_dir: Path):
     try:
         snap_dir = store.resolve(str(ref))
         snap = store.load(snap_dir)
+    except FileNotFoundError as e:
+        log_error_and_quit(logger, str(e))
+        return None
+
+    if benchmark is not None:
+        here = host_record(
+            {**collect_host(), "snakemake_cmd": list(snakemake_args or ())}
+        )
+        problems = check(snap, benchmark.model, here=here)
+        if allow_mixed_hardware:
+            problems = [
+                p for p in problems if "--allow-mixed-hardware" not in p.message
+            ]
+        for problem in problems:
+            (logger.error if problem.is_error else logger.warning)(
+                f"snapshot {snap.id}: {problem.message}"
+            )
+        if any(problem.is_error for problem in problems):
+            log_error_and_quit(logger, "refusing to reuse an incompatible snapshot.")
+            return None
+
+    try:
         imported = materialize(snap_dir, out_dir)
-    except (FileNotFoundError, SnapshotIntegrityError, RuntimeError) as e:
+    except (SnapshotIntegrityError, RuntimeError) as e:
         log_error_and_quit(logger, str(e))
         return None
 
