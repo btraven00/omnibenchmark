@@ -468,10 +468,16 @@ meaning: the latest invocation). This design needs that log, plus two fields:
 }
 ```
 
-`imported` is written by the materialiser, which knows exactly which paths it
-linked. **Do not infer imported files from `st_nlink > 1`** — inode forensics is
-guesswork where a record is free; `st_dev`/`st_ino` comparison against the
-registry is worth having only as an assertion in `ob snapshot verify`.
+`imported` is a **count**, and `starts_from` holds snapshot ids rather than
+paths. Which files came from a snapshot is already recorded, exactly, in that
+snapshot's own `MANIFEST`; repeating tens of thousands of paths in every log
+line would duplicate it at a cost that grows with the tree. A layered push
+subtracts the base snapshots' manifests to find what this run actually produced.
+
+That is a lookup, not an inference: **do not infer imported files from
+`st_nlink > 1`** — inode forensics is guesswork where a record is free.
+`st_dev`/`st_ino` comparison against the registry is worth having only as an
+assertion in `ob snapshot verify`.
 
 `imported` is what makes layered snapshots work: pushing a snapshot from a tree
 that started from another one archives `produced` only and records the parent in
@@ -674,12 +680,17 @@ label binding), `snapshot/store.py` (descriptor, `MANIFEST`, commit protocol,
 push/list/verify` and `ob run --from-snapshot`. No S3, so it is testable with no
 network and no container.
 
-**Phase 2 — run log and host capture.** `.metadata/runs.jsonl` with
-`starts_from` / `imported` / `produced`, the content-addressed
-`benchmark-<sha8>.yaml` copy (`scratch/incremental_manifest.md` A + B), the
-`SLURM_*` block and the `host_authoritative` flag (§3.8). `manifest.json` keeps
-its shape, so 007 §4.5's stability guarantee holds. Enables layered snapshots
-(`Snapshot.base`).
+**Phase 2 — run log and host capture.** *(implemented)* `backend/_runlog.py`:
+one immutable line per invocation in `.metadata/runs.jsonl` carrying `plan`,
+`status`, `starts_from`, `imported`, `produced`, the host block, the `SLURM_*`
+allocation and `host_authoritative`. Identity is read back from `manifest.json`
+rather than re-collected, so the two records cannot disagree about one run. The
+entry is appended from a `finally`, so a failed or interrupted run is recorded
+as such rather than vanishing. `save_metadata` additionally writes a
+content-addressed `benchmark-<sha8>.yaml` beside the overwritten
+`benchmark.yaml`, so editing a plan between runs no longer destroys the plan
+earlier outputs were produced under. `manifest.json` gains only the `slurm`
+field, so 007 §4.5's stability guarantee holds.
 
 **Phase 3 — compatibility and equivalence gates.** `is_compatible` on
 `(major, minor)` with the prefix-hash warning (§3.2); `hardware_class()` and the

@@ -50,6 +50,11 @@ def write_run_manifest(
       python_executable – path to the Python interpreter used to run the program
       gpu_devices      – list of NVIDIA GPU dicts {index, name, memory_total_mb}
                          from nvidia-smi; null if nvidia-smi is absent or fails
+      slurm            – SLURM allocation (cluster, partition, constraint, ...)
+                         when running inside a job; null otherwise. The
+                         partition is the site's own hardware class, which is
+                         what makes results from different phases comparable
+                         (design 012 §3.8).
     """
 
     metadata_dir = output_dir / ".metadata"
@@ -158,6 +163,8 @@ def write_run_manifest(
     except Exception:
         ob_version = None
 
+    from omnibenchmark.backend._runlog import slurm_allocation
+
     manifest = {
         "run_id": run_id,
         "ob_version": ob_version,
@@ -172,6 +179,7 @@ def write_run_manifest(
         "python_version": platform.python_version(),
         "python_executable": sys.executable,
         "gpu_devices": gpu_devices,
+        "slurm": slurm_allocation(),
     }
 
     manifest_path = metadata_dir / "manifest.json"

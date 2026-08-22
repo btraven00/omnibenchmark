@@ -316,8 +316,12 @@ def _run_benchmark(
     # place — the resolved DAG is unchanged. Snakemake skips rules whose outputs
     # are present and fresh, so "start after stage X" needs no pruning
     # (design/012 §3.5).
+    materialised = None
     if from_snapshot:
-        if not _materialise_snapshot(from_snapshot, snapshot_registry, out_dir_path):
+        materialised = _materialise_snapshot(
+            from_snapshot, snapshot_registry, out_dir_path
+        )
+        if materialised is None:
             return
 
     # Step 1: Populate git cache (fetch all repos)
@@ -391,17 +395,25 @@ def _run_benchmark(
                 extra_args.extend([f"--{key}", str(value)])
 
     # Step 3: Run snakemake
-    _run_snakemake(
-        out_dir=out_dir_path,
-        cores=cores,
-        continue_on_error=continue_on_error,
-        software_backend=b.get_benchmark_software_backend(),
-        debug=debug,
-        extra_snakemake_args=extra_args,
-        telemetry_emitter=telemetry_emitter,
-        benchmark=b,
-        resolved_nodes=resolved_nodes,
-    )
+    status = "interrupted"
+    try:
+        _run_snakemake(
+            out_dir=out_dir_path,
+            cores=cores,
+            continue_on_error=continue_on_error,
+            software_backend=b.get_benchmark_software_backend(),
+            debug=debug,
+            extra_snakemake_args=extra_args,
+            telemetry_emitter=telemetry_emitter,
+            benchmark=b,
+            resolved_nodes=resolved_nodes,
+        )
+    except SystemExit as e:
+        # _run_snakemake always exits; the code is the run's outcome.
+        status = "ok" if e.code == 0 else "failed"
+        raise
+    finally:
+        _append_run_entry(out_dir_path, benchmark_path_abs, b, materialised, status)
 
 
 def _read_rule_log(out_dir: Path, rule_name: str) -> Optional[str]:
@@ -992,8 +1004,38 @@ def _select_capable_modules(modules, module_filter, available_capabilities):
     return kept, pruned
 
 
-def _materialise_snapshot(ref, registry, out_dir: Path) -> bool:
-    """Hardlink a published snapshot into *out_dir*. False if it could not be used."""
+def _append_run_entry(
+    out_dir: Path, benchmark_yaml: Path, benchmark, materialised, status
+):
+    """Record this invocation in the append-only run log (design/012 §3.6)."""
+    from omnibenchmark.backend._runlog import append_run, plan_hash
+    from omnibenchmark.snapshot import Extent
+    from omnibenchmark.snapshot.plan import BUILTIN_LABEL
+
+    snapshot_id, imported = materialised or (None, 0)
+    produced = Extent(
+        frozenset(benchmark.model.get_stages()), BUILTIN_LABEL, frozenset()
+    ).to_dict()
+    try:
+        append_run(
+            out_dir,
+            plan=plan_hash(benchmark_yaml),
+            starts_from=[snapshot_id] if snapshot_id else [],
+            imported=imported,
+            produced=produced,
+            status=status,
+        )
+    except OSError as e:
+        # Provenance must never be the thing that fails a completed run.
+        logger.warning(f"Could not append to the run log: {e}")
+
+
+def _materialise_snapshot(ref, registry, out_dir: Path):
+    """Hardlink a published snapshot into *out_dir*.
+
+    Returns ``(snapshot_id, n_paths)``, or None when the snapshot could not be
+    used (the error has already been reported).
+    """
     from omnibenchmark.snapshot import (
         DEFAULT_REGISTRY,
         LocalSnapshotStore,
@@ -1008,13 +1050,13 @@ def _materialise_snapshot(ref, registry, out_dir: Path) -> bool:
         imported = materialize(snap_dir, out_dir)
     except (FileNotFoundError, SnapshotIntegrityError, RuntimeError) as e:
         log_error_and_quit(logger, str(e))
-        return False
+        return None
 
     logger.info(
         f"Materialised snapshot {snap.id}: {len(imported)} paths hardlinked into "
         f"{out_dir} (stages: {', '.join(sorted(snap.extent.stages))})"
     )
-    return True
+    return snap.id, len(imported)
 
 
 def _capability_prune_summary(pruned_modules, available_capabilities) -> str:
