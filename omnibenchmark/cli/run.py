@@ -149,6 +149,23 @@ def format_pydantic_errors(e: PydanticValidationError) -> str:
         "Example: --with-capability gpu --with-capability large_mem"
     ),
 )
+@click.option(
+    "--from-snapshot",
+    "from_snapshot",
+    default=None,
+    metavar="ID|PATH",
+    help=(
+        "Materialise a previously published snapshot into the output directory "
+        "before running, so its stages are not recomputed. The snapshot's own "
+        "extent says where it stops."
+    ),
+)
+@click.option(
+    "--snapshot-registry",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Registry to resolve --from-snapshot in (default: .ob/cache).",
+)
 @click.argument("snakemake_args", nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def run(
@@ -166,6 +183,8 @@ def run(
     telemetry,
     telemetry_output,
     with_capability,
+    from_snapshot,
+    snapshot_registry,
     snakemake_args,
 ):
     """Run a benchmark.
@@ -224,6 +243,8 @@ def run(
         telemetry=telemetry,
         telemetry_output=telemetry_output,
         available_capabilities=set(with_capability),
+        from_snapshot=from_snapshot,
+        snapshot_registry=snapshot_registry,
         snakemake_args=list(snakemake_args),
     )
 
@@ -242,6 +263,8 @@ def _run_benchmark(
     telemetry=None,
     telemetry_output=None,
     available_capabilities=None,
+    from_snapshot=None,
+    snapshot_registry=None,
     snakemake_args=None,
 ):
     """Run a full benchmark, or a single-module sub-graph when module_filter is set."""
@@ -288,6 +311,14 @@ def _run_benchmark(
             telemetry_emitter = TelemetryEmitter(output=Path(telemetry_output))
         else:
             telemetry_emitter = TelemetryEmitter()  # stdout
+
+    # Step 0: Materialise a snapshot, if one was named. This only puts files in
+    # place — the resolved DAG is unchanged. Snakemake skips rules whose outputs
+    # are present and fresh, so "start after stage X" needs no pruning
+    # (design/012 §3.5).
+    if from_snapshot:
+        if not _materialise_snapshot(from_snapshot, snapshot_registry, out_dir_path):
+            return
 
     # Step 1: Populate git cache (fetch all repos)
     resolution_start_ns = int(time.time() * 1_000_000_000)
@@ -959,6 +990,31 @@ def _select_capable_modules(modules, module_filter, available_capabilities):
             kept if _module_capabilities_met(module, available_capabilities) else pruned
         ).append(module)
     return kept, pruned
+
+
+def _materialise_snapshot(ref, registry, out_dir: Path) -> bool:
+    """Hardlink a published snapshot into *out_dir*. False if it could not be used."""
+    from omnibenchmark.snapshot import (
+        DEFAULT_REGISTRY,
+        LocalSnapshotStore,
+        SnapshotIntegrityError,
+        materialize,
+    )
+
+    store = LocalSnapshotStore(registry or DEFAULT_REGISTRY)
+    try:
+        snap_dir = store.resolve(str(ref))
+        snap = store.load(snap_dir)
+        imported = materialize(snap_dir, out_dir)
+    except (FileNotFoundError, SnapshotIntegrityError, RuntimeError) as e:
+        log_error_and_quit(logger, str(e))
+        return False
+
+    logger.info(
+        f"Materialised snapshot {snap.id}: {len(imported)} paths hardlinked into "
+        f"{out_dir} (stages: {', '.join(sorted(snap.extent.stages))})"
+    )
+    return True
 
 
 def _capability_prune_summary(pruned_modules, available_capabilities) -> str:

@@ -11,6 +11,7 @@ from omnibenchmark.cli.dashboard import dashboard
 from omnibenchmark.cli.describe import describe
 from omnibenchmark.cli.remote import remote
 from omnibenchmark.cli.run import run
+from omnibenchmark.cli.snapshot import snapshot
 from omnibenchmark.cli.validate import validate
 
 from .debug import add_debug_option
@@ -75,6 +76,7 @@ cli.add_command(add_debug_option(create))
 cli.add_command(add_debug_option(describe))
 cli.add_command(add_debug_option(remote))
 cli.add_command(add_debug_option(run))
+cli.add_command(add_debug_option(snapshot))
 cli.add_command(add_debug_option(validate))
 cli.add_command(archive)
 cli.add_command(dashboard)
