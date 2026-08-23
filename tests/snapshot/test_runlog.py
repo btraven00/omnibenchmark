@@ -125,3 +125,11 @@ def test_editing_the_plan_does_not_destroy_the_previous_copy(tmp_path):
     assert (out / ".metadata" / f"benchmark-{first}.yaml").read_text() == "id: v1\n"
     assert (out / ".metadata" / f"benchmark-{second}.yaml").read_text() == "id: v2\n"
     assert (out / ".metadata" / "benchmark.yaml").read_text() == "id: v2\n"
+
+
+def test_a_run_is_recorded_even_with_no_manifest_at_all(tmp_path):
+    # write_run_manifest has not run: the entry is thinner, never absent.
+    entry = append_run(tmp_path, plan="abc12345", status="failed")
+    assert entry["run_id"] is None and entry["status"] == "failed"
+    assert entry["host"]["hostname"] is None
+    assert read_runs(tmp_path)[0]["plan"] == "abc12345"

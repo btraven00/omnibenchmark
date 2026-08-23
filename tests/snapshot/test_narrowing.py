@@ -149,3 +149,24 @@ def test_a_local_base_narrows_like_a_published_one(base_tree, tmp_path):
     got = materialize_tree(base_tree, tmp_path / "w", snap, want)
     assert got == ["data/D1/.default/f.txt"]
     assert (tmp_path / "w/data/D1/.default/f.txt").stat().st_nlink == 2
+
+
+def test_union_with_an_unrestricted_extent_stays_unrestricted():
+    """Coverage folds run extents together; one run covering every branch means
+    the union covers every branch, whichever side it came from."""
+    one = Extent(frozenset({"data"}), "dataset", frozenset({"D1"}))
+    everything = Extent(frozenset({"process"}), "dataset", frozenset())
+
+    for a, b in ((one, everything), (everything, one)):
+        merged = a | b
+        assert merged.stages == {"data", "process"}
+        assert merged.slice_by == "dataset" and merged.all_values()
+
+    # An uncut extent unions with anything, keeping the other side's label.
+    uncut = Extent(frozenset({"qc"}))
+    assert (one | uncut).slice_by == "dataset"
+
+
+def test_no_filters_means_no_axis_and_no_values():
+    assert parse_filters([]) == (None, frozenset())
+    assert parse_filters(None) == (None, frozenset())

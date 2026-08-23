@@ -163,3 +163,19 @@ def test_a_non_authoritative_host_record_is_flagged():
     problems = check(snap(host=submitted), model(), here=HERE)
     assert any("submitted its run" in p.message for p in problems)
     assert not any(p.is_error for p in problems)
+
+
+def test_hardware_is_described_in_the_terms_it_was_classified_by():
+    from omnibenchmark.snapshot.compat import _describe, hardware_class
+
+    slurm = hardware_class(
+        {"slurm": {"cluster": "euler", "partition": "gpu", "constraint": "a100"}}
+    )
+    assert _describe(slurm) == "euler/gpu/a100"
+    assert _describe(("slurm", None, None, None)) == "slurm"
+
+    host = hardware_class(
+        {"host": {"cpu_model": "Ryzen", "gpu_devices": [{"name": "A100"}]}}
+    )
+    assert _describe(host) == "Ryzen + A100"
+    assert _describe(hardware_class({})) == "unknown cpu"
