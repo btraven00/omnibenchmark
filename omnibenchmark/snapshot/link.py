@@ -25,7 +25,13 @@ SKIP_TOP = {".snakemake", ".logs", ".modules", ".metadata", "Snakefile"}
 REGISTRY_MODE = 0o444
 
 
-def _included(chain, extent: Extent, label_stage: Optional[str]) -> bool:
+def link_chain(rel: str, target: str):
+    """Lineage of a symlink alias: judged by its target, never by its own path."""
+    parent = os.path.dirname(rel)
+    return lineage(os.path.join(parent, target) if parent else target)
+
+
+def included(chain, extent: Extent, label_stage: Optional[str]) -> bool:
     if not chain:
         return False
     if not all(stage in extent.stages for stage, _ in chain):
@@ -59,14 +65,12 @@ def select(
                 dirnames.remove(name)
                 rel = (rel_root / name).as_posix()
                 target = os.readlink(os.path.join(root, name))
-                if _included(
-                    lineage((rel_root / target).as_posix()), extent, label_stage
-                ):
+                if included(link_chain(rel, target), extent, label_stage):
                     links.append(rel)
 
         for name in filenames:
             rel = (rel_root / name).as_posix()
-            if _included(lineage(rel), extent, label_stage):
+            if included(lineage(rel), extent, label_stage):
                 files.append(rel)
     return sorted(files), sorted(links)
 

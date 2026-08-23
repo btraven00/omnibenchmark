@@ -161,6 +161,28 @@ def format_pydantic_errors(e: PydanticValidationError) -> str:
     ),
 )
 @click.option(
+    "--after",
+    "after_stage",
+    default=None,
+    metavar="STAGE",
+    help=(
+        "Reuse the source only up to and including STAGE, and compute "
+        "everything downstream. Narrows a source that covers more than is "
+        "wanted; without it the whole source is materialised."
+    ),
+)
+@click.option(
+    "--filter",
+    "filters",
+    multiple=True,
+    metavar="STAGE:VALUE",
+    help=(
+        "Reuse only the named branch of the source (repeatable), e.g. "
+        "--filter data:iris. The left side is the stage where branches are "
+        "cut, the right side the branch."
+    ),
+)
+@click.option(
     "--allow-mixed-hardware",
     is_flag=True,
     default=False,
@@ -194,6 +216,8 @@ def run(
     telemetry_output,
     with_capability,
     from_snapshot,
+    after_stage,
+    filters,
     allow_mixed_hardware,
     snapshot_registry,
     snakemake_args,
@@ -255,6 +279,8 @@ def run(
         telemetry_output=telemetry_output,
         available_capabilities=set(with_capability),
         from_snapshot=from_snapshot,
+        after_stage=after_stage,
+        filters=list(filters),
         allow_mixed_hardware=allow_mixed_hardware,
         snapshot_registry=snapshot_registry,
         snakemake_args=list(snakemake_args),
@@ -276,6 +302,8 @@ def _run_benchmark(
     telemetry_output=None,
     available_capabilities=None,
     from_snapshot=None,
+    after_stage=None,
+    filters=None,
     allow_mixed_hardware=False,
     snapshot_registry=None,
     snakemake_args=None,
@@ -336,6 +364,8 @@ def _run_benchmark(
             snapshot_registry,
             out_dir_path,
             benchmark=b,
+            after_stage=after_stage,
+            filters=filters,
             allow_mixed_hardware=allow_mixed_hardware,
             snakemake_args=snakemake_args,
         )
@@ -1053,39 +1083,81 @@ def _materialise_snapshot(
     registry,
     out_dir: Path,
     benchmark=None,
+    after_stage=None,
+    filters=None,
     allow_mixed_hardware: bool = False,
     snakemake_args=None,
 ):
-    """Hardlink a published snapshot into *out_dir*.
+    """Reuse part of an earlier run: hardlink it into *out_dir*.
 
-    Returns ``(snapshot_id, n_paths)``, or None when the snapshot could not be
-    used (the error has already been reported). The compatibility gate runs
-    before anything is linked, so a rejected snapshot leaves the working
-    directory untouched.
+    *ref* is a published snapshot (by id or path) or a plain output directory
+    from an earlier run. Both are described by a Snapshot; only the way of
+    obtaining one differs, and a derived description is marked ``source="local"``
+    because it has no digests and may change under us.
+
+    ``--after``/``--filter`` narrow what is taken, so a source covering more than
+    is wanted can still seed the run. Returns ``(snapshot_id, n_paths)``, or
+    None when the source could not be used (already reported).
     """
     from omnibenchmark.backend._manifest import collect_host
     from omnibenchmark.backend._runlog import host_record
     from omnibenchmark.snapshot import (
         DEFAULT_REGISTRY,
+        Extent,
         LocalSnapshotStore,
         SnapshotIntegrityError,
         check,
         materialize,
     )
+    from omnibenchmark.snapshot.plan import parse_filters, stage_closure
+    from omnibenchmark.snapshot.store import materialize_tree, snapshot_of_tree
 
     store = LocalSnapshotStore(registry or DEFAULT_REGISTRY)
+    model = benchmark.model if benchmark is not None else None
+
+    # A published snapshot carries its own extent; an output tree does not, so
+    # there the extent has to be stated (or defaults to the whole plan).
     try:
         snap_dir = store.resolve(str(ref))
-        snap = store.load(snap_dir)
-    except FileNotFoundError as e:
+        snap, base_dir = store.load(snap_dir), None
+    except FileNotFoundError as missing:
+        if model is None or not Path(str(ref)).is_dir():
+            log_error_and_quit(logger, str(missing))
+            return None
+        base_dir = Path(str(ref))
+        try:
+            stages = (
+                stage_closure(model, after_stage)
+                if after_stage
+                else frozenset(model.get_stages())
+            )
+            axis, values = parse_filters(filters)
+            label = _label_stage_for(model, axis)
+            snap = snapshot_of_tree(base_dir, Extent(stages, label, values), label)
+        except ValueError as e:
+            log_error_and_quit(logger, str(e))
+            return None
+
+    try:
+        want = _narrow(snap, model, after_stage, filters)
+    except ValueError as e:
         log_error_and_quit(logger, str(e))
         return None
 
-    if benchmark is not None:
+    if want is not None and not snap.extent.covers(want):
+        log_error_and_quit(
+            logger,
+            f"{snap.id} covers stages [{', '.join(sorted(snap.extent.stages))}] "
+            f"but [{', '.join(sorted(want.stages))}] were asked for. Reuse a "
+            "source that reaches at least that far, or move --after upstream.",
+        )
+        return None
+
+    if model is not None:
         here = host_record(
             {**collect_host(), "snakemake_cmd": list(snakemake_args or ())}
         )
-        problems = check(snap, benchmark.model, here=here)
+        problems = check(snap, model, here=here)
         if allow_mixed_hardware:
             problems = [
                 p for p in problems if "--allow-mixed-hardware" not in p.message
@@ -1098,17 +1170,50 @@ def _materialise_snapshot(
             log_error_and_quit(logger, "refusing to reuse an incompatible snapshot.")
             return None
 
+    if not snap.reproducible:
+        logger.warning(
+            f"reusing the working tree at {snap.path} directly. It is not "
+            "published, so nothing detects it changing underneath this run, and "
+            "an archive of these results cannot point at it — it must inline "
+            "them. Publish it with `ob snapshot push` for a reproducible base."
+        )
+
     try:
-        imported = materialize(snap_dir, out_dir)
+        if base_dir is not None:
+            imported = materialize_tree(base_dir, out_dir, snap, snap.extent)
+        else:
+            imported = materialize(snap_dir, out_dir, want=want)
     except (SnapshotIntegrityError, RuntimeError) as e:
         log_error_and_quit(logger, str(e))
         return None
 
     logger.info(
-        f"Materialised snapshot {snap.id}: {len(imported)} paths hardlinked into "
-        f"{out_dir} (stages: {', '.join(sorted(snap.extent.stages))})"
+        f"Materialised {snap.id}: {len(imported)} paths hardlinked into "
+        f"{out_dir} (stages: {', '.join(sorted((want or snap.extent).stages))})"
     )
     return snap.id, len(imported)
+
+
+def _label_stage_for(model, axis):
+    """Resolve a --filter axis (a stage id, or a label) to the labelling stage."""
+    from omnibenchmark.snapshot.plan import BUILTIN_LABEL, label_stage
+
+    if axis is None:
+        return label_stage(model, BUILTIN_LABEL)
+    return axis if axis in model.get_stages() else label_stage(model, axis)
+
+
+def _narrow(snap, model, after_stage, filters):
+    """The sub-extent of *snap* this run actually wants, or None for all of it."""
+    from omnibenchmark.snapshot import Extent
+    from omnibenchmark.snapshot.plan import parse_filters, stage_closure
+
+    if not after_stage and not filters:
+        return None
+
+    stages = stage_closure(model, after_stage) if after_stage else snap.extent.stages
+    _, values = parse_filters(filters, snapshot=snap)
+    return Extent(stages, snap.extent.slice_by, values)
 
 
 def _capability_prune_summary(pruned_modules, available_capabilities) -> str:

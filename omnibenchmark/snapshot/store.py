@@ -22,8 +22,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from omnibenchmark.snapshot.extent import Extent
-from omnibenchmark.snapshot.link import place, sha256
+from omnibenchmark.snapshot.extent import Extent, lineage
+from omnibenchmark.snapshot.link import included, link_chain, place, select, sha256
 
 DESCRIPTOR = "snapshot.json"
 MANIFEST = "MANIFEST"
@@ -47,10 +47,22 @@ class Snapshot:
     # published before the gate existed, which then skip those checks.
     prefix_hash: Optional[str] = None
     host: Optional[dict] = None
+    # "published" — committed into a registry, digests recorded, immutable.
+    # "local"     — derived from a working output tree: no digests, and nothing
+    #               stops it changing under us. Reusable, but not reproducible:
+    #               it cannot be re-fetched and a pointer to it can dangle.
+    source: str = "published"
+    path: Optional[str] = None
 
     @property
     def id(self) -> str:
-        return f"{self.benchmark_id}/{self.version}/{self.extent.key()}"
+        stem = f"{self.benchmark_id}/{self.version}/{self.extent.key()}"
+        return stem if self.source == "published" else f"local:{stem}"
+
+    @property
+    def reproducible(self) -> bool:
+        """Whether this can be fetched again and checked against what it was."""
+        return self.source == "published"
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +75,8 @@ class Snapshot:
             "manifest_sha256": self.manifest_sha256,
             "prefix_hash": self.prefix_hash,
             "host": self.host,
+            "source": self.source,
+            "path": self.path,
         }
 
     @classmethod
@@ -77,6 +91,8 @@ class Snapshot:
             manifest_sha256=d.get("manifest_sha256"),
             prefix_hash=d.get("prefix_hash"),
             host=d.get("host"),
+            source=d.get("source", "published"),
+            path=d.get("path"),
         )
 
 
@@ -92,10 +108,10 @@ def _write_manifest(dest: Path, digests: Dict[str, str], links: List[str]) -> st
     return sha256(path)
 
 
-def read_manifest(snap_dir: Path) -> Tuple[Dict[str, Tuple[int, str]], List[str]]:
-    """Parse MANIFEST into ``({path: (size, sha256)}, [symlink paths])``."""
+def read_manifest(snap_dir: Path) -> Tuple[Dict[str, Tuple[int, str]], Dict[str, str]]:
+    """Parse MANIFEST into ``({path: (size, sha256)}, {symlink path: target})``."""
     files: Dict[str, Tuple[int, str]] = {}
-    links: List[str] = []
+    links: Dict[str, str] = {}
     for line in (snap_dir / MANIFEST).read_text().splitlines():
         if not line:
             continue
@@ -104,7 +120,8 @@ def read_manifest(snap_dir: Path) -> Tuple[Dict[str, Tuple[int, str]], List[str]
             rel, size, digest = rest.rsplit("\t", 2)
             files[rel] = (int(size), digest)
         else:
-            links.append(rest.split("\t", 1)[0])
+            rel, target = rest.split("\t", 1)
+            links[rel] = target
     return files, links
 
 
@@ -137,8 +154,18 @@ def verify(snap_dir: Path, deep: bool = True) -> None:
             raise SnapshotIntegrityError(f"{snap_dir}: missing symlink {rel}")
 
 
-def materialize(snap_dir: Path, out_dir: Path, deep: bool = False) -> List[str]:
+def materialize(
+    snap_dir: Path,
+    out_dir: Path,
+    want: Optional[Extent] = None,
+    deep: bool = False,
+) -> List[str]:
     """Hardlink a snapshot's payload into *out_dir*.
+
+    *want* narrows what is taken. A snapshot that covers three stages and four
+    datasets can seed a run that only wants the first two stages of one dataset;
+    the caller has already checked ``snapshot.extent.covers(want)``, and this
+    filters the payload to it. Without *want* the whole snapshot is taken.
 
     Verified before anything is linked, so a bad snapshot never half-populates a
     working directory. The default check is size-and-presence: materialising
@@ -146,9 +173,37 @@ def materialize(snap_dir: Path, out_dir: Path, deep: bool = False) -> List[str]:
     otherwise instant operation. Use ``deep=True`` (``--verify``) to pay for it.
     """
     verify(snap_dir, deep=deep)
+    snap = LocalSnapshotStore.load(snap_dir)
     files, links = read_manifest(snap_dir)
+    if want is not None:
+        files = {
+            rel: meta
+            for rel, meta in files.items()
+            if included(lineage(rel), want, snap.label_stage)
+        }
+        links = {
+            rel: target
+            for rel, target in links.items()
+            if included(link_chain(rel, target), want, snap.label_stage)
+        }
     place(snap_dir, out_dir, sorted(files), sorted(links))
     return sorted(files) + sorted(links)
+
+
+def materialize_tree(
+    base_dir: Path, out_dir: Path, snap: "Snapshot", want: Extent
+) -> List[str]:
+    """Hardlink part of a plain output tree into *out_dir*.
+
+    The unpublished counterpart of :func:`materialize`: an output directory is
+    already laid out like a snapshot's payload, so the extent is read straight
+    off the paths. No digests exist, and none are needed — a live directory has
+    no wire in flight to corrupt it — but nothing here can detect the base
+    changing underneath, which is what ``source="local"`` records.
+    """
+    files, links = select(base_dir, want, snap.label_stage)
+    place(base_dir, out_dir, files, links)
+    return files + links
 
 
 class LocalSnapshotStore:
@@ -209,3 +264,52 @@ class LocalSnapshotStore:
     @staticmethod
     def load(path: Path) -> Snapshot:
         return Snapshot.from_dict(json.loads((path / DESCRIPTOR).read_text()))
+
+
+def snapshot_of_tree(
+    base_dir: Path, extent: Extent, label_stage: Optional[str]
+) -> Snapshot:
+    """Describe a plain output tree as a snapshot, without publishing it.
+
+    An output directory already carries everything the gate needs: the plan it
+    was produced under (`.metadata/benchmark.yaml`) and the machine that
+    produced it (`.metadata/manifest.json`). So reusing a colleague's `out/`
+    needs no new concepts — only a descriptor built in memory instead of read
+    from disk, marked ``source="local"`` because it has no digests and may
+    change under us.
+    """
+    import json as _json
+
+    from omnibenchmark.backend._runlog import host_record
+
+    metadata = Path(base_dir) / ".metadata"
+    plan = metadata / "benchmark.yaml"
+    if not plan.is_file():
+        raise FileNotFoundError(
+            f"{base_dir} is neither a published snapshot nor an output directory "
+            f"(no {plan}). Only trees produced by `ob run` can be reused directly."
+        )
+
+    from omnibenchmark.model import Benchmark as BenchmarkModel
+
+    model = BenchmarkModel.from_yaml(plan)
+    host = None
+    manifest = metadata / "manifest.json"
+    if manifest.is_file():
+        try:
+            host = host_record(_json.loads(manifest.read_text()))
+        except (OSError, _json.JSONDecodeError):
+            host = None
+
+    from omnibenchmark.snapshot.compat import prefix_hash
+
+    return Snapshot(
+        benchmark_id=model.get_name(),
+        version=model.get_version(),
+        extent=extent,
+        label_stage=label_stage,
+        prefix_hash=prefix_hash(model, extent.stages),
+        host=host,
+        source="local",
+        path=str(Path(base_dir).resolve()),
+    )

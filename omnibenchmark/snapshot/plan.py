@@ -70,3 +70,40 @@ def label_stage(model, label: str = BUILTIN_LABEL) -> Optional[str]:
             "on the stage the slice should follow."
         )
     return roots[0]
+
+
+def parse_filters(specs, snapshot=None):
+    """``["data:iris"]`` -> ``("data", frozenset({"iris"}))``.
+
+    The left side names *where* the branch cut is taken — the labelling stage,
+    or equivalently the label it advertises — and the right side names *which*
+    branch. Repeating the flag unions branches on the same axis; a second axis
+    is rejected, because an extent is cut on one label (012 §3.1).
+    """
+    axes, values = set(), set()
+    for spec in specs or ():
+        stage, sep, value = spec.partition(":")
+        if not sep or not stage or not value:
+            raise ValueError(
+                f"--filter {spec!r}: expected STAGE:VALUE, e.g. --filter data:iris"
+            )
+        axes.add(stage)
+        values.add(value)
+
+    if not axes:
+        return None, frozenset()
+    if len(axes) > 1:
+        raise ValueError(
+            f"--filter cuts on one axis at a time, but {', '.join(sorted(axes))} "
+            "were given. Filter on one, and let the others expand."
+        )
+
+    axis = axes.pop()
+    if snapshot is not None:
+        known = {snapshot.label_stage, snapshot.extent.slice_by} - {None}
+        if axis not in known:
+            raise ValueError(
+                f"--filter {axis}:...: this source's branches are cut at "
+                f"{' / '.join(sorted(known)) or 'no stage'}, not {axis!r}."
+            )
+    return axis, frozenset(values)

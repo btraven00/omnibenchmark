@@ -337,6 +337,38 @@ tampering editor) and needs the deep pass, which is why `verify` exists.
 half-populate a working directory and leave the user to work out which files are
 real.
 
+### 3.3.2 A published snapshot and an output tree are the same thing
+
+An output directory produced by `ob run` already carries everything a snapshot
+descriptor holds: the plan it was produced under
+(`.metadata/benchmark-<sha8>.yaml`, §3.6), the machine that produced it
+(`.metadata/manifest.json`), and a layout the extent can be read straight off
+(§3.1). So reusing a colleague's `out/`, or the output of the previous phase of
+a chained SLURM job, needs no second mechanism — only a `Snapshot` built in
+memory rather than read from disk.
+
+What differs is not the shape but the **guarantee**, and the descriptor says so
+in a `source` field:
+
+| | `published` | `local` |
+|---|---|---|
+| Digests | recorded in `MANIFEST` | none |
+| Commit point | descriptor written last | none — it is a live directory |
+| Can be fetched again | yes | no |
+| Can change underneath a reader | no (mode 0444) | yes |
+
+`local` is therefore *reusable but not reproducible*, and that distinction is
+load-bearing exactly once: **a pointer to a non-reproducible base is a dangling
+reference.** An archive of results derived from a published snapshot may record
+the snapshot's id and omit its files; an archive derived from a local tree must
+inline them, because there is nothing to point at. That is the rule §3.6's
+layering follows, not a special case bolted onto it.
+
+A local base is deliberately *not* frozen to mode 0444. Freezing would protect
+the derived tree, but `chmod` acts on the shared inode, so it would also turn
+someone else's working directory read-only as a side effect of reading it. The
+run warns instead, and says what publishing would buy.
+
 ### 3.4 The port
 
 `omnibenchmark/storage/base.py` already defines the storage port
@@ -602,14 +634,22 @@ ob run bench.yaml --from-snapshot <id> --after data # optional assertion (see be
 ob snapshot verify bench.yaml     # registry links intact, digests match, extents cover
 ```
 
-Two notes on the flags:
+Three notes on the flags:
 
-- **`--from-snapshot` carries the cut; `--after STAGE` does not need to.** The
-  snapshot's own extent already says where it stops. `--after` is therefore
-  accepted as an *assertion* — "I expect the fetched slice to end at `data`" —
-  and errors if the extent disagrees. It is not the mechanism. Making the stage
-  name the mechanism would duplicate, in the CLI, a fact the descriptor already
-  carries, and would let the two disagree.
+- **`--after` and `--filter` are narrowing operators on the consume side.** A
+  source describes what it *covers*; a run states what it *wants*. Those are not
+  the same: a snapshot reaching through preprocessing can seed a run that only
+  wants the raw data, and one holding four datasets can seed a run that only
+  wants one. So `--after STAGE` (vertical) and `--filter STAGE:VALUE`
+  (horizontal) build a sub-extent, `Extent.covers()` checks the source reaches
+  that far, and the materialiser filters the payload to it. Neither flag is an
+  assertion, and neither duplicates the descriptor: the descriptor says what is
+  available, the flags say what is taken.
+- **`--filter`'s left side is the stage where branches are cut**, or
+  equivalently the label that stage advertises — `--filter data:iris`. Naming
+  the stage means the caller never has to know the label vocabulary. Repeating
+  the flag unions branches on one axis; a second axis is an error, because an
+  extent is cut on one label (§3.1).
 - **`--only` names a value, not `label=value`.** The descriptor already records
   `slice_by`, so repeating the label in the consumer's flag would let the two
   disagree — the same argument as `--after`. `--slice-by` appears only on
