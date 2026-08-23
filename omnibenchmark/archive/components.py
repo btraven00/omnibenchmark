@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from omnibenchmark.core import BenchmarkExecution
+from omnibenchmark.logging import logger
 from omnibenchmark.model import SoftwareBackendEnum
 from omnibenchmark.model.benchmark import _is_environment_url
 from omnibenchmark.storage import (
@@ -200,6 +201,7 @@ def prepare_archive_results(
     results_dir: str,
     remote_storage: bool = False,
     storage: Optional[RemoteStorage] = None,
+    include_base: bool = False,
 ) -> List[Path]:
     """
     Prepare the results files to archive.
@@ -222,42 +224,68 @@ def prepare_archive_results(
     if remote_storage:
         return prepare_archive_results_remote(benchmark, results_dir, storage)
     else:
-        return prepare_archive_results_local(benchmark, results_dir)
+        return prepare_archive_results_local(benchmark, results_dir, include_base)
 
 
 def prepare_archive_results_local(
-    benchmark: BenchmarkExecution, results_dir: str
+    benchmark: BenchmarkExecution, results_dir: str, include_base: bool = False
 ) -> List[Path]:
     """
     Prepare local results files for archiving (no remote storage required).
 
+    Files that were hardlinked in from a *published* snapshot are left out by
+    default: the run log names the snapshot they came from, and that log is
+    itself archived, so the archive points at them instead of carrying a second
+    copy. Files from a local base are always carried, because a pointer to an
+    unpublished tree would dangle (design/012 §3.3.2).
+
     Args:
         benchmark: The benchmark execution object
         results_dir: Directory containing results files
+        include_base: Carry reused files too, for a self-contained archive
 
     Returns:
         List[Path]: The filenames of existing local files to archive
     """
+    from omnibenchmark.snapshot.store import imported_paths
+
+    reused = set() if include_base else imported_paths(Path(results_dir))
     # Get expected files based on benchmark configuration
     storage_options = StorageOptions(out_dir=results_dir)
     expected_files = get_expected_benchmark_output_files(benchmark, storage_options)
+
+    results_path = Path(results_dir)
+
+    def is_reused(path: Path) -> bool:
+        if not reused:
+            return False
+        try:
+            return path.relative_to(results_path).as_posix() in reused
+        except ValueError:
+            return False
 
     # Filter to only include files that actually exist locally
     existing_files = []
     for file_path in expected_files:
         path_obj = Path(file_path)
-        if path_obj.is_file():
+        if path_obj.is_file() and not is_reused(path_obj):
             existing_files.append(path_obj)
 
     # Also include any additional files in the results directory
-    results_path = Path(results_dir)
     if results_path.exists() and results_path.is_dir():
         additional_files = [
             f
             for f in results_path.rglob("*")
-            if f.is_file() and f not in existing_files
+            if f.is_file() and f not in existing_files and not is_reused(f)
         ]
         existing_files.extend(additional_files)
+
+    if reused:
+        logger.info(
+            f"Archive omits {len(reused)} file(s) reused from published "
+            "snapshots; .metadata/runs.jsonl names them. Use --include-base "
+            "for a self-contained archive."
+        )
 
     return existing_files
 

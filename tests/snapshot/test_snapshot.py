@@ -256,3 +256,17 @@ def test_materialise_refuses_a_broken_snapshot(out_tree, tmp_path):
         materialize(snap_dir, fresh)
     # Verified before anything is linked, so nothing was half-populated.
     assert not fresh.exists() or not any(fresh.rglob("*.txt"))
+
+
+def test_performance_files_are_never_part_of_a_slice(out_tree):
+    # Snakemake writes `benchmark:` files in place, so a materialised one would
+    # be written through the hardlink into the shared base -- and per-run
+    # timings must not be inherited by a run that did not produce them.
+    perf = out_tree / "data/D1/.default/performance.txt"
+    perf.write_text("s\th:m:s\n1.0\t0:00:01\n")
+    legacy = out_tree / "data/D2/.default/D2_performance.txt"
+    legacy.write_text("s\th:m:s\n2.0\t0:00:02\n")
+
+    files, _ = select(out_tree, Extent(frozenset({"data"})), "data")
+    assert not any("performance.txt" in rel for rel in files)
+    assert "data/D1/.default/f.txt" in files

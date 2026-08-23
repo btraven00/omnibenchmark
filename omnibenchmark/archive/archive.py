@@ -35,6 +35,7 @@ def archive_benchmark(
     compresslevel: Optional[int] = None,
     dry_run: bool = False,
     remote_storage: bool = False,
+    include_base: bool = False,
     storage: Optional[RemoteStorage] = None,
     custom_filename: Optional[str] = None,
 ) -> List[Path]:
@@ -53,6 +54,8 @@ def archive_benchmark(
         compresslevel: Compression level
         dry_run: If True, return list of files without creating archive
         remote_storage: Whether to use remote storage for results
+        include_base: Carry files reused from a published snapshot instead of
+            pointing at it via the archived run log (design/012 §3.3.2)
         storage: A connected storage backend, required when remote_storage is
             True. Built and injected by the caller so archive depends only on
             the storage interface, not on any concrete backend.
@@ -82,7 +85,7 @@ def archive_benchmark(
     # Results (output files)
     if results:
         for f in prepare_archive_results(
-            benchmark, results_dir, remote_storage, storage
+            benchmark, results_dir, remote_storage, storage, include_base
         ):
             files_to_archive.append((f, str(f)))
 

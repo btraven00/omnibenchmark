@@ -73,6 +73,17 @@ from .debug import add_debug_option
     default=False,
 )
 @click.option(
+    "--include-base",
+    is_flag=True,
+    default=False,
+    help=(
+        "Carry files reused from a published snapshot into the archive. By "
+        "default they are omitted and .metadata/runs.jsonl names the snapshot "
+        "they came from. Files reused from an unpublished tree are always "
+        "carried, since a pointer to one would dangle."
+    ),
+)
+@click.option(
     "--out-dir",
     help="Local directory name to archive from (local-only mode). Default: `out`",
     default=None,
@@ -96,6 +107,7 @@ def archive(
     compresslevel,
     dry_run,
     use_remote_storage,
+    include_base,
     out_dir,
     output_file,
 ):
@@ -196,6 +208,7 @@ def archive(
         compresslevel=compresslevel,
         dry_run=dry_run,
         remote_storage=use_remote_storage,
+        include_base=include_base,
         storage=storage,
         custom_filename=custom_filename,
     )

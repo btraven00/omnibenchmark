@@ -19,6 +19,21 @@ from omnibenchmark.snapshot.extent import Extent, lineage, slice_value
 # prevent one (012 §3.5).
 SKIP_TOP = {".snakemake", ".logs", ".modules", ".metadata", "Snakefile"}
 
+# Snakemake's `benchmark:` files, named by backend/snakemake.py. They are never
+# part of a slice, for two reasons that point the same way:
+#   * Snakemake removes an `output:` before rerunning a job but writes a
+#     `benchmark:` file *in place*, so a materialised one is written straight
+#     through the hardlink into the shared base.
+#   * They are per-run measurements. Inheriting them would attribute timings to
+#     a run that never produced them, which is exactly what §3.8 exists to
+#     prevent.
+PERFORMANCE = "performance.txt"
+
+
+def is_performance(name: str) -> bool:
+    return name == PERFORMANCE or name.endswith("_" + PERFORMANCE)
+
+
 # Registry files are read-only so an in-place write cannot reach the shared
 # cache through a hardlink. Snakemake turns this into a named
 # ProtectedOutputException instead of silent corruption (012 §3.5).
@@ -69,6 +84,8 @@ def select(
                     links.append(rel)
 
         for name in filenames:
+            if is_performance(name):
+                continue
             rel = (rel_root / name).as_posix()
             if included(lineage(rel), extent, label_stage):
                 files.append(rel)

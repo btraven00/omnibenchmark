@@ -313,3 +313,32 @@ def snapshot_of_tree(
         source="local",
         path=str(Path(base_dir).resolve()),
     )
+
+
+def imported_paths(out_dir: Path, registry: Optional[Path] = None) -> set:
+    """Relative paths in *out_dir* that came from a published snapshot.
+
+    Read from the run log's ``starts_from`` and the named snapshots' own
+    MANIFESTs — a lookup, never an inode heuristic (§3.6).
+
+    Only *published* sources count. A local base cannot be pointed at, so
+    anything taken from one has to travel with the archive rather than be
+    subtracted from it (§3.3.2). A source that cannot be resolved is skipped for
+    the same reason: if we cannot say what it holds, we must not drop files on
+    the assumption it holds them.
+    """
+    from omnibenchmark.backend._runlog import read_runs
+
+    store = LocalSnapshotStore(registry or DEFAULT_REGISTRY)
+    paths: set = set()
+    for run in read_runs(out_dir):
+        for ref in run.get("starts_from") or ():
+            if not ref or str(ref).startswith("local:"):
+                continue
+            try:
+                files, links = read_manifest(store.resolve(str(ref)))
+            except (FileNotFoundError, OSError, ValueError):
+                continue
+            paths.update(files)
+            paths.update(links)
+    return paths
