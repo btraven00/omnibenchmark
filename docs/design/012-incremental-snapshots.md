@@ -298,14 +298,89 @@ Phases 1–3 are what the SLURM case needs; it never touches phase 4, because on
 cluster the shared filesystem *is* the remote and `LocalSnapshotStore` addresses
 it directly.
 
-**Open for phase 4.** The registry default (`.ob/cache`) is project-local by
-necessity — hardlinks need the output directory's volume, and a home-directory
-default would `EXDEV` on exactly the clusters this targets (`/home` vs
-`/scratch`). Two questions deferred with it: whether a multi-gigabyte cache
-should live in a *visible*, self-ignoring directory rather than a dot-directory,
-and whether downloaded **tarballs** — which are only bytes in transit, not
-hardlink sources — belong in `~/.cache/omnibenchmark/snapshots/` instead. An
-`ob cache info` / `ob cache clean` command belongs with that decision.
+## 8.1 Phase 4 — implementation notes
+
+Not started. What is settled, so it need not be re-derived.
+
+### Two caches, not one
+
+The constraint that shapes everything: hardlinks need the output directory's
+volume, so the *extracted* payload cannot live in `$HOME` — a home default would
+`EXDEV` on exactly the clusters this targets (`/home` vs `/scratch`). Downloaded
+tarballs have no such constraint: they are bytes in transit, never a hardlink
+source. So they split:
+
+| | holds | default | may be deleted |
+|---|---|---|---|
+| download cache | `.tar` payloads as fetched | `~/.cache/omnibenchmark/snapshots/` (XDG) | freely — re-fetchable |
+| registry | extracted, mode 0444, hardlink source | project-local (today `.ob/cache`) | frees space, forces re-fetch |
+
+Both configurable, following the `get_git_cache_dir()` precedent in
+`config.py`: `[dirs] snapshot_downloads` and `[dirs] snapshot_cache`.
+
+Two questions deferred with this and worth settling first: whether a
+multi-gigabyte registry should be a **visible, self-ignoring** directory rather
+than a dot-directory that hides its size from `ls` and `du`, and an
+`ob cache info` / `ob cache clean` command — which only earns its place if it
+covers the git module cache too, since `ob snapshot list` already lists
+snapshots.
+
+### Payload layout
+
+One archive per branch plus one for the trunk — that is what makes a horizontal
+slice cheap to fetch: one dataset costs two objects regardless of how many the
+benchmark has. Grouping is `slice_value(lineage(rel), label_stage)` over the
+selected paths, with `None` (trunk) going to `_trunk.tar`.
+
+```
+<bucket>/
+├── config/  software/  out/  versions/     # 003, untouched
+└── snapshots/<benchmark_id>/<version>/<extent_key>/
+    ├── snapshot.json      # descriptor; written LAST
+    ├── MANIFEST           # per-file size + sha256, as locally
+    ├── _trunk.tar
+    └── <slice_value>.tar
+```
+
+`tarfile`, **uncompressed**. Python 3.12/3.13 have no stdlib zstd (3.14 only),
+the project has no zstd dependency, and `archive.py` already chose
+`ZIP_STORED` for the same reason: benchmark outputs are largely incompressible
+and extraction throughput matters more than transfer size. Revisit on a
+measurement, not a preference.
+
+Verified behaviours to rely on and not work around: `tarfile` emits `LNKTYPE`
+for a second link and `extractall` restores real hardlinks; `filter="data"`
+(required from 3.14, and the right default anyway) preserves mtime, which
+§5.1 depends on. Extract with `filter="data"`, then `chmod 0444`.
+
+### Commit protocol and integrity
+
+Identical to the local store (§5.4) and for the same reason: payload objects
+first, `MANIFEST` second, `snapshot.json` last. A single `PUT` is atomic and S3
+has been read-after-write consistent since 2020, so the descriptor's presence is
+the readiness signal there too.
+
+One addition the local store does not need: the descriptor must carry a sha256
+**per archive**, so a download is checked *before* extraction rather than after.
+`MANIFEST` then covers the extracted files as it does locally.
+
+### Layered snapshots
+
+Pushing from a tree that was itself seeded records the source in
+`Snapshot.base` and archives only what that source does not already hold.
+The subtraction already exists — `snapshot.store.imported_paths()`, written for
+the archive layer — and works the same way here: read `starts_from` from the run
+log, read those snapshots' `MANIFEST`s, omit what they contain. Fetching a
+derived snapshot pulls its bases transitively. Local bases can never be a
+`base`, for the dangling-pointer reason in §3.2.
+
+### Guardrails
+
+Decisions that look like oversights and are not: do not ship
+`.snakemake/metadata/` in the payload (§5.2 — it can only add reruns); do not
+compress by default; do not put the extracted registry under `$HOME`; do not
+add per-file content addressing (§7). Named remotes stay unimplemented until
+there is a second remote to name — a snapshot elsewhere is a URI.
 
 ## 9. References
 
