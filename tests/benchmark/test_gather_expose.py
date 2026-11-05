@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from omnibenchmark.core._expand import expand_gather_stage
-from omnibenchmark.model.benchmark import Benchmark
+from omnibenchmark.model.benchmark import APIVersion, Benchmark
 from omnibenchmark.model.resolved import TemplateContext
 
 
@@ -45,7 +45,10 @@ def _expand(pca_modules, expose, path_exclusions=None):
         resources=None,
     )
     model = SimpleNamespace(
-        get_name=lambda: "b", get_version=lambda: "1", get_author=lambda: "me"
+        get_name=lambda: "b",
+        get_version=lambda: "1",
+        get_author=lambda: "me",
+        api_version=APIVersion.V0_8_0,
     )
     return expand_gather_stage(
         stage=stage,
