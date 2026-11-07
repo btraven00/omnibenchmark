@@ -44,6 +44,7 @@ from omnibenchmark.core._prune import (
 from omnibenchmark.cli.formatting import pretty_print_parse_error
 from omnibenchmark.logging import logger
 from omnibenchmark.core import populate_git_cache
+from omnibenchmark.core import hooks
 from omnibenchmark.model import SoftwareBackendEnum
 from omnibenchmark.model.benchmark import APIVersion
 from omnibenchmark.model.validation import BenchmarkParseError
@@ -192,6 +193,12 @@ def format_pydantic_errors(e: PydanticValidationError) -> str:
         "still matches instead of erroring. Skipped selections are listed as warnings."
     ),
 )
+@click.option(
+    "--no-hooks",
+    is_flag=True,
+    default=False,
+    help="Don't run the pre-run and post-run hooks configured in omnibenchmark.cfg.",
+)
 @click.argument("snakemake_args", nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def run(
@@ -212,6 +219,7 @@ def run(
     until_stage,
     filter_arg,
     allow_drift,
+    no_hooks,
     snakemake_args,
 ):
     """Run a benchmark.
@@ -309,6 +317,7 @@ def run(
         filter_blob=filter_blob,
         allow_drift=allow_drift,
         snakemake_args=list(snakemake_args),
+        run_hooks=not no_hooks,
     )
 
 
@@ -330,6 +339,7 @@ def _run_benchmark(
     filter_blob=None,
     allow_drift=False,
     snakemake_args=None,
+    run_hooks=True,
 ):
     """Run a full benchmark, or a single-module sub-graph when module_filter is set."""
     start_time = time.time()
@@ -371,6 +381,23 @@ def _run_benchmark(
     # Suppress logging when streaming telemetry to stdout (would interleave with JSONL).
     if use_telemetry_stdout:
         logging.getLogger("omnibenchmark").setLevel(logging.WARNING)
+
+    # Hooks (design 016): none on --dry, which writes nothing. Before the
+    # telemetry emitter, which creates its output file.
+    if not run_hooks:
+        logger.info("Skipping hooks (--no-hooks).")
+    run_hooks = run_hooks and not dry
+    provenance = b.model.provenance
+    hook_env = {
+        "OB_PLAN_ID": b.model.id,
+        "OB_PLAN_VERSION": str(b.model.get_version()),
+        "OB_PLAN_URL": (provenance and provenance.canonical_url) or "",
+    }
+    if run_hooks:
+        hooks.log_active()
+        if hooks.run("pre-run", benchmark_path_abs, out_dir_path, env=hook_env):
+            logger.error("pre-run hook stopped the run.")
+            sys.exit(hooks.VETO)
 
     # Setup telemetry emitter early so pre-snakemake phases are traced.
     telemetry_emitter = None
@@ -488,18 +515,29 @@ def _run_benchmark(
             elif value is not None:
                 extra_args.extend([f"--{key}", str(value)])
 
-    # Step 3: Run snakemake
-    _run_snakemake(
-        out_dir=out_dir_path,
-        cores=cores,
-        continue_on_error=continue_on_error,
-        software_backend=b.get_benchmark_software_backend(),
-        debug=debug,
-        extra_snakemake_args=extra_args,
-        telemetry_emitter=telemetry_emitter,
-        benchmark=b,
-        resolved_nodes=resolved_nodes,
-    )
+    # Step 3: Run snakemake. It exits the process; post-run runs either way.
+    rc = 0
+    try:
+        _run_snakemake(
+            out_dir=out_dir_path,
+            cores=cores,
+            continue_on_error=continue_on_error,
+            software_backend=b.get_benchmark_software_backend(),
+            debug=debug,
+            extra_snakemake_args=extra_args,
+            telemetry_emitter=telemetry_emitter,
+            benchmark=b,
+            resolved_nodes=resolved_nodes,
+        )
+    except SystemExit as e:
+        rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        raise
+    except BaseException as e:
+        rc = 130 if isinstance(e, KeyboardInterrupt) else 1
+        raise
+    finally:
+        if run_hooks:
+            hooks.run("post-run", benchmark_path_abs, out_dir_path, rc, env=hook_env)
 
 
 def _read_rule_log(out_dir: Path, rule_name: str) -> Optional[str]:
