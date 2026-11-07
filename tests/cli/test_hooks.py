@@ -98,6 +98,7 @@ def _run(tmp_path, dry=False, snakemake=None):
         patch("omnibenchmark.cli.run.populate_git_cache"),
         patch("omnibenchmark.cli.run._generate_explicit_snakefile"),
         patch("omnibenchmark.cli.run.write_run_manifest") as manifest,
+        patch("omnibenchmark.cli.run.write_run_record"),
         patch("omnibenchmark.cli.run._run_snakemake", side_effect=snakemake),
     ):
         b = MagicMock()
