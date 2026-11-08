@@ -5,6 +5,10 @@ This project adheres to [Semantic Versioning](https://semver.org/) and [Conventi
 
 ## [0.8.0](https://github.com/omnibenchmark/omnibenchmark/releases/tag/v0.8.0) (UNRELEASED)
 
+- **breaking (api 0.8.0)**: a fan-in module (gather or collector) receives `--manifest <lineage.json>` instead of `--<id> p1 p2 …`. The manifest (lineage.json v2) lists every member's files by output id and its full lineage. A local `run:` rule writes it, so the command line no longer grows with the member count. Snakemake passes a shell block to `bash -c` as one argument, capped at 128 KiB, and gathers failed with "Argument list too long" at a few hundred members (design 010 §3.5.1)
+- **breaking (api 0.8.0)**: `group_by: S` partitions a gather's members by the ancestor *node* of S (its full lineage), not by its module, and the gather node is a child of that node instead of a cut chain (design 010 §3.2.1). api < 0.8.0 keeps module grouping
+- fix: a gather left out of a `--filter`'s picks is dropped instead of failing with "gathers from output id …, which no stage produces" when the filter also pruned its producers
+
 - feat: `ob create` prefills the author from git's `user.name`/`user.email`, overridable via `[user]` in the omnibenchmark config; `--author-name`/`--author-email` are no longer required with `--non-interactive`
 - feat: `ob config KEY [VALUE]` / `--list` / `--unset` reads and writes the omnibenchmark config, git-style
 - feat: `ob describe status --watch SECONDS` redraws the text report on an interval and exits once every expected output exists; it only reads the output tree, so it works with any executor (#386)
