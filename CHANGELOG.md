@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and [Conventi
 
 ## [0.8.0](https://github.com/omnibenchmark/omnibenchmark/releases/tag/v0.8.0) (UNRELEASED)
 
+- **feat**: `gather: {group_by: S, from: [a, b]}` names the grouping axis once; the list form stays valid.
 - **breaking (api 0.8.0)**: a fan-in module (gather or collector) receives `--from-files <lineage.json>` instead of `--<id> p1 p2 …`. The manifest (lineage.json v2) lists every member's files by output id and its full lineage. A local `run:` rule writes it, so the command line no longer grows with the member count. Snakemake passes a shell block to `bash -c` as one argument, capped at 128 KiB, and gathers failed with "Argument list too long" at a few hundred members (design 010 §3.5.1)
 - **feat (api 0.8.0)**: a gather with `group_by` may declare `inputs:`. They resolve from its group node's lineage, as for a scatter child of that node, and reach the module as `--<id> <path>` next to `--from-files` (design 010 §3.5.2). A global gather, or any gather before 0.8.0, still rejects them
 - **breaking (api 0.8.0)**: every gather's directory moves under `out/gathers/<stage>/`: `gathers/<stage>/by-<S>/<S node dir>/<segment>/` for `group_by: S`, `gathers/<stage>/<segment>/` for a global gather. The DAG is unchanged; `human/`, `ob collect` and remote storage follow the prefix (design 007 §3.1.6)
