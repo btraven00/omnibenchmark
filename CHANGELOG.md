@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and [Conventi
 
 ## [0.8.0](https://github.com/omnibenchmark/omnibenchmark/releases/tag/v0.8.0) (UNRELEASED)
 
+- **feat (api 0.8.0)**: the fan-in manifest carries each member's and each lineage entry's `parameters` (values by name) next to the `params` hash.
 - **feat**: `gather: {group_by: S, from: [a, b]}` names the grouping axis once; the list form stays valid.
 - **breaking (api 0.8.0)**: a fan-in module (gather or collector) receives `--from-files <lineage.json>` instead of `--<id> p1 p2 …`. The manifest (lineage.json v2) lists every member's files by output id and its full lineage. A local `run:` rule writes it, so the command line no longer grows with the member count. Snakemake passes a shell block to `bash -c` as one argument, capped at 128 KiB, and gathers failed with "Argument list too long" at a few hundred members (design 010 §3.5.1)
 - **feat (api 0.8.0)**: a gather with `group_by` may declare `inputs:`. They resolve from its group node's lineage, as for a scatter child of that node, and reach the module as `--<id> <path>` next to `--from-files` (design 010 §3.5.2). A global gather, or any gather before 0.8.0, still rejects them
