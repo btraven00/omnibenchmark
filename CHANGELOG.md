@@ -5,7 +5,8 @@ This project adheres to [Semantic Versioning](https://semver.org/) and [Conventi
 
 ## [0.8.0](https://github.com/omnibenchmark/omnibenchmark/releases/tag/v0.8.0) (UNRELEASED)
 
-- **breaking (api 0.8.0)**: a node without parameters has no `.default` field in its directory (`data.D1/`, not `data.D1.default/`); existing 0.8.0 trees recompute
+- **breaking (api 0.8.0)**: a node without parameters has no `.default` field in its directory or its node id (`data.D1/`, not `data.D1.default/`); existing 0.8.0 trees recompute
+- **breaking (api 0.8.0)**: a fan-in manifest member no longer repeats its own `stage`, `module`, `params` and `parameters`; they are its last `lineage` entry. `params` is null for a node without parameters
 - **feat (api 0.8.0)**: `gather: {from: x, path: reports}` names the gather's directory. A gather with `group_by` nests in its group node's directory, a global one sits at the top of `out/` (design 007 §3.1.6)
 - **feat (api 0.8.0)**: the fan-in manifest carries each member's and each lineage entry's `parameters` (values by name) next to the `params` hash.
 - **feat**: `gather: {group_by: S, from: [a, b]}` names the grouping axis once; the list form stays valid.
